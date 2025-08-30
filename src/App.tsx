@@ -12,6 +12,7 @@ import OwnersAuth from "./pages/OwnersAuth";
 import SuperAdminLogin from "./pages/SuperAdminLogin";
 import RegisterComplex from "./pages/RegisterComplex";
 import ComplexDetails from "./pages/ComplexDetails";
+import AuthCallback from "./pages/auth/callback";
 import Dashboard from "./pages/Dashboard";
 import MyReservations from "./pages/MyReservations";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
