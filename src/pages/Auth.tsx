@@ -1,13 +1,8 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { LogIn, UserPlus, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,35 +71,47 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const handleSocialLogin = async (provider: 'google' | 'facebook') => {
+  const handleSocialLogin = async (provider: "google" | "facebook") => {
     setSocialLoading(provider);
     setError("");
-
+  
     try {
-      // Use the actual production URL
-      const baseUrl = window.location.hostname === 'localhost' 
-        ? window.location.origin 
-        : 'https://canchalibre.vercel.app';
-
+      // URL base dinámica (local, preview de Vercel o prod)
+      const baseUrl =
+        typeof window !== "undefined" && window.location?.origin
+          ? window.location.origin
+          : "https://canchalibre.vercel.app";
+  
+      // Scopes por proveedor (seguí usando los tuyos; agrego los típicos)
+      const scopes =
+        provider === "google"
+          ? "openid email profile"
+          : "public_profile email"; // facebook
+  
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${baseUrl}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        }
+          redirectTo: `${baseUrl}/auth/callback`, // Asegurate de tener esta ruta y declararla en Supabase > Auth > URL Configuration > Redirect URLs
+          scopes,
+          queryParams:
+            provider === "google"
+              ? {
+                  access_type: "offline",
+                  prompt: "consent",
+                }
+              : undefined,
+        },
       });
-
+  
       if (error) throw error;
-      
-      // Don't reset loading here - let the auth state change handle it
-    } catch (error: any) {
-      setError(error.message);
+  
+      // Importante: no reseteo loading aquí porque habrá redirección.
+    } catch (err: any) {
+      setError(err?.message || "Error iniciando sesión");
       setSocialLoading(null);
     }
   };
+  
 
 
   return (
