@@ -83,7 +83,7 @@ const OwnersAuth = () => {
       // Use the actual production URL
       const baseUrl = window.location.hostname === 'localhost' 
         ? window.location.origin 
-        : 'https://canchalibre.lovable.app';
+        : 'https://canchalibre.vercel.app';
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
