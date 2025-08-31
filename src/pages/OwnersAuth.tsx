@@ -30,7 +30,7 @@ const OwnersAuth = () => {
     console.log(TAG, "fetchProfileRole() for user_id:", uid);
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, role, is_admin")
+      .select("user_id, role")
       .eq("user_id", uid)
       .maybeSingle();
 
