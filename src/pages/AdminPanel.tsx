@@ -11,6 +11,7 @@ import AdminSubscriptions from "@/components/admin/AdminSubscriptions";
 import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import { Link } from "react-router-dom";
+import AdminCreateOwnerAndComplex from "@/components/admin/AdminCreateOwnerAndComplex";
 
 const AdminPanel = () => {
   const { isAuthenticated, loading, logout } = useSuperAdmin();
@@ -108,6 +109,7 @@ const AdminPanel = () => {
           </TabsContent>
 
           <TabsContent value="complexes" className="space-y-6">
+          <AdminCreateOwnerAndComplex />
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
