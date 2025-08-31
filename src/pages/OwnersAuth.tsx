@@ -9,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+const TAG = "[OwnersAuth]";
+
 const OwnersAuth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,77 +19,87 @@ const OwnersAuth = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  // Si ya hay sesión, verificamos el rol y redirigimos a /dashboard si es owner
+  // ---------- Helpers ----------
+  const goDashboard = () => {
+    const target = "/dashboard"; // <-- si tu ruta real es otra, cámbiala aquí
+    console.log(TAG, "navigate →", target);
+    navigate(target, { replace: true });
+  };
+
+  const fetchProfileRole = async (uid: string) => {
+    console.log(TAG, "fetchProfileRole() for user_id:", uid);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("user_id, role, is_admin")
+      .eq("user_id", uid)
+      .maybeSingle();
+
+    console.log(TAG, "profiles query →", { data, error });
+    return { data, error };
+  };
+
+  // ---------- Auto-redirect si ya hay sesión ----------
   useEffect(() => {
-    const run = async () => {
+    let unsub: (() => void) | undefined;
+
+    (async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      console.log(TAG, "initial getSession →", !!session);
       const uid = session?.user?.id;
-      if (!uid) return;
-
-      const { data: p, error: pErr } = await supabase
-        .from("profiles")
-        .select("role, is_admin")
-        .eq("user_id", uid)
-        .single();
-
-      if (pErr) {
-        // en caso de que no exista perfil: cerrar sesión para evitar estados raros
-        await supabase.auth.signOut();
-        return;
+      if (uid) {
+        const { data, error } = await fetchProfileRole(uid);
+        if (!error && data?.role === "owner") {
+          goDashboard();
+        }
       }
 
-      if (p && (p as any).role === "owner") {
-        navigate("/dashboard", { replace: true });
-      } else {
-        await supabase.auth.signOut();
-      }
-    };
-    run();
+      // Suscripción a cambios de auth
+      const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
+        console.log(TAG, "onAuthStateChange →", event, !!sess);
+        if (!sess?.user) return;
+        const { data, error } = await fetchProfileRole(sess.user.id);
+        if (!error && data?.role === "owner") goDashboard();
+      });
 
-    // también escuchamos cambios de auth (por si otra pestaña loguea)
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session?.user) return;
-      const { data: p } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("user_id", session.user.id)
-        .single();
-      if (p?.role === "owner") navigate("/dashboard", { replace: true });
-    });
+      unsub = () => sub?.subscription?.unsubscribe();
+    })();
 
-    return () => { sub?.subscription?.unsubscribe(); };
-  }, [navigate]);
+    return () => { try { unsub?.(); } catch {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // ---------- Submit login ----------
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     try {
+      console.log(TAG, "signInWithPassword()");
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log(TAG, "signInWithPassword →", { user: data?.user?.id, error });
+
       if (error) throw error;
+      if (!data?.user?.id) throw new Error("No se obtuvo el usuario luego del login.");
 
-      const { data: p, error: pErr } = await supabase
-        .from("profiles")
-        .select("role, is_admin")
-        .eq("user_id", data.user.id)
-        .single();
-
+      const { data: p, error: pErr } = await fetchProfileRole(data.user.id);
       if (pErr) throw pErr;
 
-      if (p && (p as any).role === "owner") {
-        navigate("/dashboard", { replace: true });
+      if (p?.role === "owner") {
+        goDashboard();
       } else {
         await supabase.auth.signOut();
         setError("Esta cuenta no tiene permisos de propietario.");
       }
     } catch (err: any) {
+      console.error(TAG, "login error:", err);
       setError(err?.message ?? "No se pudo iniciar sesión.");
     } finally {
       setLoading(false);
     }
   };
 
+  // ---------- Reset pass ----------
   const sendReset = async () => {
     setSendingReset(true);
     setError("");
@@ -98,18 +110,21 @@ const OwnersAuth = () => {
           ? window.location.origin
           : "https://canchalibre.vercel.app";
 
+      console.log(TAG, "resetPasswordForEmail → redirectTo:", `${base}/owners/reset`);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${base}/owners/reset`,
       });
       if (error) throw error;
       alert("Te enviamos un email con el enlace para restablecer tu contraseña.");
     } catch (err: any) {
+      console.error(TAG, "reset error:", err);
       setError(err?.message ?? "No se pudo enviar el email de recuperación.");
     } finally {
       setSendingReset(false);
     }
   };
 
+  // ---------- UI ----------
   return (
     <>
       <Helmet>
