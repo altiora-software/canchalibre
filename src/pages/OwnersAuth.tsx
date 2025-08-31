@@ -77,7 +77,10 @@ const OwnersAuth = () => {
     try {
       console.log(TAG, "signInWithPassword()");
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('pase, no muestro nada')
       console.log(TAG, "signInWithPassword →", { user: data?.user?.id, error });
+      console.log('pase, tengo data dentro', data)
+      console.log('pase, tengo error dentro', error)
 
       if (error) throw error;
       if (!data?.user?.id) throw new Error("No se obtuvo el usuario luego del login.");
