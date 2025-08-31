@@ -35,7 +35,7 @@ const Dashboard = () => {
   const userComplexes = complexes;
 
   if (!user) {
-    navigate('/auth');
+    navigate('/owners/auth');
     return null;
   }
 
