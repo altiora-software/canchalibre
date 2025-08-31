@@ -28,7 +28,7 @@ export default function OwnersReset() {
 
   const [checking,     setChecking]     = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
-  const [accessToken,  setAccessToken]  = useState<string | null>(null); // <-- clave para el fallback REST
+  const [accessToken,  setAccessToken]  = useState<string | null>(null); // Fallback REST
   const [status,       setStatus]       = useState<"idle" | "ok" | "error">("idle");
   const [error,        setError]        = useState("");
   const [ok,           setOk]           = useState("");
@@ -36,9 +36,10 @@ export default function OwnersReset() {
 
   const navigate = useNavigate();
 
-  // Intenta procesar el retorno de Supabase Auth y dejar algo utilizable:
-  // - sesión SDK lista (ideal)
-  // - o al menos un access_token válido en `accessToken` (fallback REST)
+  // Procesa el retorno de Supabase Auth:
+  // - Si hay access_token: habilita UI (y trata de crear sesión si viene refresh_token)
+  // - Si hay code (PKCE): intenta exchange
+  // - Si hay token&type=recovery: intenta verifyOtp
   const tryInitSession = async () => {
     setError("");
     setStatus("idle");
@@ -49,60 +50,56 @@ export default function OwnersReset() {
     });
 
     try {
-      // 1) ¿Volvimos con #access_token=... ?
+      // 1) Hash con access_token
       if (window.location.hash.includes("access_token")) {
         const hp = new URLSearchParams(window.location.hash.replace(/^#/, ""));
         const at = hp.get("access_token");
         const rt = hp.get("refresh_token");
         console.log(TAG, "hash tokens", { at: !!at, rt: !!rt });
 
-        if (at && rt) {
-          // Caso completo: setear sesión por SDK
-          const { data, error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
-          console.log(TAG, "setSession(hash) →", { data, error });
-          if (error) throw error;
-        } else if (at) {
-          // Caso parcial (común en recovery): guardo el access token para fallback REST
+        if (at) {
+          // habilitar fallback REST inmediatamente
           setAccessToken(at);
-          console.log(TAG, "access_token sin refresh_token: usaré fallback REST");
+          setStatus("ok");
         }
-        // Limpio el hash para no dejar tokens a la vista
+
+        if (at && rt) {
+          // Intentá armar sesión por SDK, pero no bloquees si falla
+          const { error } = await supabase.auth.setSession({ access_token: at, refresh_token: rt });
+          if (error) console.warn(TAG, "setSession(hash) failed, using REST fallback", error);
+        }
+
+        // Ocultá tokens del hash
         window.history.replaceState({}, document.title, window.location.pathname);
       }
-
-      // 2) ¿Volvimos con ?code=... (PKCE)?
+      // 2) PKCE code
       else if (window.location.search.includes("code=")) {
         const sp = new URLSearchParams(window.location.search);
         const code = sp.get("code");
         if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-          console.log(TAG, "exchangeCodeForSession() →", { data, error });
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
-
-      // 3) ¿Volvimos con ?token=...&type=recovery?
+      // 3) token&type=recovery
       else if (
         window.location.search.includes("token=") &&
         window.location.search.includes("type=recovery")
       ) {
         const sp = new URLSearchParams(window.location.search);
         const token = sp.get("token");
-        // En algunos entornos, verifyOtp con token_hash funciona;
-        // si no, igualmente quedará el fallback por access_token cuando el backend redirija.
         if (token) {
-          const { data, error } = await supabase.auth.verifyOtp({
+          const { error } = await supabase.auth.verifyOtp({
             type: "recovery",
             token_hash: token,
           } as any);
-          console.log(TAG, "verifyOtp(recovery) →", { data, error });
-          if (error) throw error;
+          if (error) console.warn(TAG, "verifyOtp(recovery) failed (will rely on REST link)", error);
           window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
 
-      // 4) ¿Tenemos sesión por SDK?
+      // 4) ¿Quedó sesión del SDK?
       const current = await supabase.auth.getSession();
       console.log(TAG, "final getSession()", current);
 
@@ -111,10 +108,10 @@ export default function OwnersReset() {
         setStatus("ok");
         console.log(TAG, "SDK session READY ✅");
       } else if (accessToken || window.location.hash.includes("access_token")) {
-        // Sin sesión, pero con access_token → habilito UI con fallback REST
+        // Ya guardamos accessToken arriba → UI habilitada con REST
         setSessionReady(false);
         setStatus("ok");
-        console.log(TAG, "No SDK session, pero hay access_token → habilito UI con fallback REST ✅");
+        console.log(TAG, "No SDK session, but access_token present → REST fallback ✅");
       } else {
         throw new Error("El enlace no es válido o ya fue usado.");
       }
@@ -124,12 +121,12 @@ export default function OwnersReset() {
       setStatus("error");
       setError(e?.message || "No se pudo inicializar la sesión de recuperación.");
     } finally {
-      setChecking(false);
+      setChecking(false); // ¡No te quedes en Validando…!
       console.log(TAG, "tryInitSession() end");
     }
   };
 
-  // Montaje + pequeños reintentos de lectura de sesión
+  // Montaje (con un par de reintentos cortos de lectura de sesión)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -137,7 +134,6 @@ export default function OwnersReset() {
       await tryInitSession();
 
       if (!cancelled) {
-        // reintentos muy cortos por si el navegador tarda en exponer la sesión
         for (let i = 0; i < 3; i++) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session) {
@@ -154,7 +150,7 @@ export default function OwnersReset() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cálculo de checks visuales
+  // Checks visuales
   const checks = useMemo(() => {
     const c = {
       length: rules.length(password),
@@ -168,7 +164,7 @@ export default function OwnersReset() {
     return c;
   }, [password, confirm]);
 
-  // Válido si (hay sesión SDK o al menos accessToken) Y cumple reglas
+  // Habilita submit si hay (session SDK o access_token) y cumple reglas
   const canSubmit =
     (sessionReady || !!accessToken) &&
     checks.length && checks.lower && checks.upper && checks.number && checks.symbol && checks.match;
@@ -188,13 +184,12 @@ export default function OwnersReset() {
     setLoading(true);
     try {
       if (sessionReady) {
-        // Camino feliz: SDK con sesión
+        // Vía SDK
         console.log(TAG, "updateUser via SDK");
-        const { data, error } = await supabase.auth.updateUser({ password });
-        console.log(TAG, "updateUser result:", { data, error });
+        const { error } = await supabase.auth.updateUser({ password });
         if (error) throw error;
       } else if (accessToken) {
-        // Fallback REST: PUT /auth/v1/user con Bearer {access_token}
+        // Fallback REST
         console.log(TAG, "update password via REST with access_token");
         const url = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/user`;
         const resp = await fetch(url, {
@@ -247,111 +242,117 @@ export default function OwnersReset() {
             <CardDescription>Ingresá tu nueva contraseña para tu cuenta de propietario.</CardDescription>
           </CardHeader>
 
-        <CardContent>
-          {(checking || status === "idle") && (
-            <Alert className="mb-4">
-              <AlertDescription>Validando enlace…</AlertDescription>
-            </Alert>
-          )}
+          <CardContent>
+            {(checking || status === "idle") && (
+              <Alert className="mb-4">
+                <AlertDescription>Validando enlace…</AlertDescription>
+              </Alert>
+            )}
 
-          {status === "error" && (
-            <Alert className="mb-4">
-              <AlertDescription className="text-destructive">
-                {error || "El enlace no es válido o ya fue usado."}
-              </AlertDescription>
-            </Alert>
-          )}
+            {status === "error" && (
+              <Alert className="mb-4">
+                <AlertDescription className="text-destructive">
+                  {error || "El enlace no es válido o ya fue usado."}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          {ok && (
-            <Alert className="mb-4">
-              <AlertDescription className="text-green-600">{ok}</AlertDescription>
-            </Alert>
-          )}
+            {ok && (
+              <Alert className="mb-4">
+                <AlertDescription className="text-green-600">{ok}</AlertDescription>
+              </Alert>
+            )}
 
-          <form onSubmit={onSave} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="p1">Nueva contraseña</Label>
-              <div className="relative">
-                <Input
-                  id="p1"
-                  type={showP1 ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                  disabled={checking || loading || status === "error"}
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
-                  onClick={() => setShowP1((s) => !s)}
-                  aria-label={showP1 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                >
-                  {showP1 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            <form onSubmit={onSave} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="p1">Nueva contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="p1"
+                    type={showP1 ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
+                    // ← ya NO bloqueamos por "checking"
+                    disabled={loading || status === "error"}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
+                    onClick={() => setShowP1((s) => !s)}
+                    aria-label={showP1 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showP1 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="p2">Confirmar contraseña</Label>
-              <div className="relative">
-                <Input
-                  id="p2"
-                  type={showP2 ? "text" : "password"}
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  autoComplete="new-password"
-                  disabled={checking || loading || status === "error"}
-                  required
-                />
-                <button
-                  type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
-                  onClick={() => setShowP2((s) => !s)}
-                  aria-label={showP2 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                >
-                  {showP2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+              <div className="space-y-2">
+                <Label htmlFor="p2">Confirmar contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="p2"
+                    type={showP2 ? "text" : "password"}
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    autoComplete="new-password"
+                    disabled={loading || status === "error"} // ← igual que arriba
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
+                    onClick={() => setShowP2((s) => !s)}
+                    aria-label={showP2 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showP2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-1 bg-muted/20 rounded p-3">
-              <Row ok={rules.length(password)} label="Mínimo 8 caracteres" />
-              <Row ok={rules.lower(password)}  label="Una letra minúscula" />
-              <Row ok={rules.upper(password)}  label="Una letra mayúscula" />
-              <Row ok={rules.number(password)} label="Un número" />
-              <Row ok={rules.symbol(password)} label="Un símbolo" />
-              <Row ok={password.length > 0 && password === confirm} label="Coincidencia en confirmación" />
-            </div>
+              <div className="space-y-1 bg-muted/20 rounded p-3">
+                <Row ok={rules.length(password)} label="Mínimo 8 caracteres" />
+                <Row ok={rules.lower(password)}  label="Una letra minúscula" />
+                <Row ok={rules.upper(password)}  label="Una letra mayúscula" />
+                <Row ok={rules.number(password)} label="Un número" />
+                <Row ok={rules.symbol(password)} label="Un símbolo" />
+                <Row ok={password.length > 0 && password === confirm} label="Coincidencia en confirmación" />
+              </div>
 
-            <div className="flex gap-2">
-              <Button type="submit" className="w-full" disabled={loading || checking || !canSubmit}>
-                {loading ? "Guardando…" : "Guardar contraseña"}
-              </Button>
-
-              {status === "error" && (
+              <div className="flex gap-2">
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={async () => {
-                    console.log(TAG, "Manual retry clicked");
-                    setChecking(true);
-                    await tryInitSession();
-                    setChecking(false);
-                  }}
-                  title="Reintentar validar enlace"
+                  type="submit"
+                  className="w-full"
+                  // ← ya NO bloqueamos por "checking"
+                  disabled={loading || !canSubmit}
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  {loading ? "Guardando…" : "Guardar contraseña"}
                 </Button>
-              )}
-            </div>
 
-            {/* Debug opcional */}
-            <pre className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
+                {status === "error" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      console.log(TAG, "Manual retry clicked");
+                      setChecking(true);
+                      await tryInitSession();
+                      setChecking(false);
+                    }}
+                    title="Reintentar validar enlace"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Debug opcional */}
+              <pre className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
 {JSON.stringify({ checking, status, sessionReady, hasAccessToken: !!accessToken, canSubmit }, null, 2)}
-            </pre>
-          </form>
-        </CardContent>
+              </pre>
+            </form>
+          </CardContent>
         </Card>
       </div>
     </>
