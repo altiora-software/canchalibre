@@ -18,58 +18,66 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in and handle social login completion
-    const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Check if this is a new social user without role
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, full_name')
-          .eq('user_id', session.user.id)
+    let unsub: { subscription: { unsubscribe: () => void } } | null = null;
+  
+    const handleSession = async (uid: string) => {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role, full_name")
+        .eq("user_id", uid)            // tu esquema usa user_id
+        .single();
+  
+      if (error) {
+        // si el trigger aún no creó el profile, espera un toque y reintenta 1 vez
+        await new Promise(r => setTimeout(r, 300));
+        const { data: p2 } = await supabase
+          .from("profiles")
+          .select("role, full_name")
+          .eq("user_id", uid)
           .single();
-
-        if (!profile?.role || profile.role === 'customer') {
-          // Show role selection modal for new social users or users without proper role
-          const userName = profile?.full_name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
-          setPendingSocialUser({
-            email: session.user.email || '',
-            name: userName
-          });
-          setShowRoleModal(true);
-        } else {
-          navigate("/");
+        if (p2?.role === "customer") {
+          navigate("/", { replace: true });
+          return;
         }
+        await supabase.auth.signOut();
+        setError("Este acceso social es solo para clientes.");
+        return;
+      }
+  
+      if (profile?.role === "customer") {
+        navigate("/", { replace: true });
+      } else {
+        await supabase.auth.signOut();
+        setError("Este acceso social es solo para clientes.");
       }
     };
-
-    checkUser();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        // Check if this is a social login and needs role selection
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, full_name')
-          .eq('user_id', session.user.id)
-          .single();
-
-        if (!profile?.role) {
-          const userName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
-          setPendingSocialUser({
-            email: session.user.email || '',
-            name: userName
-          });
-          setShowRoleModal(true);
-        } else {
-          navigate("/");
-        }
+  
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await handleSession(session.user.id);
       }
-    });
-
-    return () => subscription.unsubscribe();
+      // escucha futuros cambios (por si llega después el SIGNED_IN del OAuth)
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          await handleSession(session.user.id);
+        }
+        if (event === "SIGNED_OUT") {
+          // limpia estados UI si hace falta
+          // setShowRoleModal(false);
+          // setPendingSocialUser(null);
+        }
+      });
+      unsub = data;
+    };
+  
+    init();
+  
+    return () => {
+      unsub?.subscription.unsubscribe();
+    };
   }, [navigate]);
+  
 
   const handleSocialLogin = async (provider: "google" | "facebook") => {
     setSocialLoading(provider);
