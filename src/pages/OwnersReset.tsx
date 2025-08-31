@@ -9,17 +9,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Check, X, RefreshCw } from "lucide-react";
 
+const TAG = "[OwnersReset]";
+
 function parseParams() {
   const search = new URLSearchParams(window.location.search);
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const get = (k: string) => search.get(k) || hash.get(k);
-  return {
+
+  const parsed = {
     access_token: get("access_token"),
     refresh_token: get("refresh_token"),
     code: get("code"),
     token: get("token"),
     type: (get("type") || get("token_type")) || undefined,
   };
+
+  console.log(TAG, "parseParams()", {
+    search: window.location.search,
+    hash: window.location.hash,
+    parsed,
+  });
+
+  return parsed;
 }
 
 const rules = {
@@ -51,47 +62,62 @@ export default function OwnersReset() {
     const { access_token, refresh_token, code, token, type } = parseParams();
 
     try {
+      console.log(TAG, "tryInitSession() start");
+
       // 1) Hash tokens (#access_token/#refresh_token)
       if (access_token && refresh_token) {
-        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        console.log(TAG, "setSession() with hash tokens");
+        const { data, error } = await supabase.auth.setSession({ access_token, refresh_token });
+        console.log(TAG, "setSession() result:", { data, error });
         if (error) throw error;
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       // 2) PKCE (?code=...)
       else if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        console.log(TAG, "exchangeCodeForSession() with code", code);
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        console.log(TAG, "exchangeCodeForSession() result:", { data, error });
         if (error) throw error;
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       // 3) token hash (?token=...&type=recovery)
       else if (token && (type === "recovery" || type === "recovery_token")) {
-        // Nota: algunos flows requieren email; si fuera tu caso, pedimos email y lo pasamos.
+        console.log(TAG, "verifyOtp() with token hash", { token, type });
         const { data, error } = await supabase.auth.verifyOtp({
           type: "recovery",
           token_hash: token,
         } as any);
+        console.log(TAG, "verifyOtp() result:", { data, error });
+
         if (error) throw error;
-        if (!data.session) {
-          // A veces devuelve user + tokens; intentar leer sesión
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) throw new Error("No se pudo crear la sesión desde el token.");
+
+        if (!data?.session) {
+          // A veces no retorna session directo
+          const s = await supabase.auth.getSession();
+          console.log(TAG, "getSession() after verifyOtp():", s);
+          if (!s.data.session) throw new Error("No se pudo crear la sesión desde el token.");
         }
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      // 4) Si no vino nada, quizá Supabase ya dejó la sesión lista
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("El enlace no es válido o ya fue usado.");
+      // 4) Revisar si ya hay sesión
+      const current = await supabase.auth.getSession();
+      console.log(TAG, "final getSession():", current);
+
+      if (!current.data.session) throw new Error("El enlace no es válido o ya fue usado.");
 
       setSessionReady(true);
       setStatus("ok");
+      console.log(TAG, "Session READY ✅");
     } catch (e: any) {
-      console.error("[OwnersReset] init session error:", e);
+      console.error(TAG, "init session error ❌", e);
       setSessionReady(false);
       setStatus("error");
       setError(e?.message || "No se pudo inicializar la sesión de recuperación.");
+    } finally {
+      console.log(TAG, "tryInitSession() end");
     }
   };
 
@@ -100,13 +126,16 @@ export default function OwnersReset() {
     let cancelled = false;
     (async () => {
       setChecking(true);
+      console.log(TAG, "effect mount → tryInitSession()");
       await tryInitSession();
 
       if (!cancelled && !sessionReady) {
-        // pequeños reintentos de lectura de sesión (hasta ~2s)
+        console.log(TAG, "no session yet → small retries");
         for (let i = 0; i < 4; i++) {
+          // pequeños reintentos de lectura de sesión (hasta ~2s)
           await new Promise((r) => setTimeout(r, 500));
           const { data: { session } } = await supabase.auth.getSession();
+          console.log(TAG, `retry #${i + 1} getSession():`, !!session);
           if (session) {
             setSessionReady(true);
             setStatus("ok");
@@ -115,6 +144,7 @@ export default function OwnersReset() {
         }
       }
       if (!cancelled) setChecking(false);
+      console.log(TAG, "effect end", { sessionReady: !cancelled && sessionReady });
     })();
     return () => {
       cancelled = true;
@@ -122,14 +152,19 @@ export default function OwnersReset() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const checks = useMemo(() => ({
-    length: rules.length(password),
-    lower: rules.lower(password),
-    upper: rules.upper(password),
-    number: rules.number(password),
-    symbol: rules.symbol(password),
-    match: password.length > 0 && password === confirm,
-  }), [password, confirm]);
+  const checks = useMemo(() => {
+    const c = {
+      length: rules.length(password),
+      lower: rules.lower(password),
+      upper: rules.upper(password),
+      number: rules.number(password),
+      symbol: rules.symbol(password),
+      match: password.length > 0 && password === confirm,
+    };
+    // Log en vivo (throttle natural por renders)
+    console.log(TAG, "password checks", c);
+    return c;
+  }, [password, confirm]);
 
   const isValid =
     sessionReady &&
@@ -144,6 +179,9 @@ export default function OwnersReset() {
     e.preventDefault();
     setOk("");
     setError("");
+
+    console.log(TAG, "onSave()", { sessionReady, isValid });
+
     if (!sessionReady) {
       setError("La sesión de recuperación no está activa. Volvé a abrir el enlace del email.");
       return;
@@ -155,11 +193,17 @@ export default function OwnersReset() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
+      console.log(TAG, "updateUser({ password: *** })");
+      const { data, error } = await supabase.auth.updateUser({ password });
+      console.log(TAG, "updateUser result:", { data, error });
       if (error) throw error;
       setOk("Contraseña actualizada. Ya podés ingresar.");
-      setTimeout(() => navigate("/owners/auth", { replace: true }), 1200);
+      setTimeout(() => {
+        console.log(TAG, "navigate → /owners/auth");
+        navigate("/owners/auth", { replace: true });
+      }, 1200);
     } catch (err: any) {
+      console.error(TAG, "updateUser error ❌", err);
       setError(err?.message ?? "No se pudo actualizar la contraseña.");
     } finally {
       setLoading(false);
@@ -189,8 +233,11 @@ export default function OwnersReset() {
 
           <CardContent>
             {(checking || status === "idle") && (
-              <Alert className="mb-4"><AlertDescription>Validando enlace…</AlertDescription></Alert>
+              <Alert className="mb-4">
+                <AlertDescription>Validando enlace…</AlertDescription>
+              </Alert>
             )}
+
             {status === "error" && (
               <Alert className="mb-4">
                 <AlertDescription className="text-destructive">
@@ -198,6 +245,7 @@ export default function OwnersReset() {
                 </AlertDescription>
               </Alert>
             )}
+
             {ok && (
               <Alert className="mb-4">
                 <AlertDescription className="text-green-600">{ok}</AlertDescription>
@@ -274,6 +322,7 @@ export default function OwnersReset() {
                     type="button"
                     variant="outline"
                     onClick={async () => {
+                      console.log(TAG, "Manual retry clicked");
                       setChecking(true);
                       await tryInitSession();
                       setChecking(false);
@@ -284,6 +333,11 @@ export default function OwnersReset() {
                   </Button>
                 )}
               </div>
+
+              {/* Debug visible opcional (comentá si no lo querés en UI) */}
+              <pre className="text-xs text-muted-foreground mt-2 whitespace-pre-wrap">
+{JSON.stringify({ checking, status, sessionReady, isValid }, null, 2)}
+              </pre>
             </form>
           </CardContent>
         </Card>
