@@ -25,7 +25,6 @@ const Dashboard = () => {
   const { complexes, loading, fetchOwnerComplexes } = useComplexes();
   const navigate = useNavigate();
   
-  // Load owner's complexes when user is available
   useEffect(() => {
     if (user && isOwner) {
       fetchOwnerComplexes(user.id);

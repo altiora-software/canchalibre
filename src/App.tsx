@@ -13,13 +13,13 @@ import SuperAdminLogin from "./pages/SuperAdminLogin";
 import RegisterComplex from "./pages/RegisterComplex";
 import ComplexDetails from "./pages/ComplexDetails";
 import AuthCallback from "./pages/AuthCallback";
-import Dashboard from "./pages/Dashboard";
 import MyReservations from "./pages/MyReservations";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 import OwnersReset from "@/pages/OwnersReset";
+import ComplexDashboard from "./pages/ComplexDashboard";
 
 const queryClient = new QueryClient();
 
@@ -40,7 +40,7 @@ const App = () => (
               <Route path="/owners/reset" element={<OwnersReset />} />
               <Route path="/register-complex" element={<RegisterComplex />} />
               <Route path="/complex/:id" element={<ComplexDetails />} />
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<ComplexDashboard />} />
               <Route path="/my-reservations" element={<MyReservations />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
