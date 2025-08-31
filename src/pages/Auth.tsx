@@ -185,7 +185,7 @@ const Auth = () => {
                   ) : "Continuar con Google"}
                 </Button>
                 
-                <Button 
+                {/* <Button 
                   type="button"
                   variant="outline" 
                   className="w-full flex items-center gap-3 h-12 text-base font-medium hover:bg-muted/50 transition-colors"
@@ -201,7 +201,7 @@ const Auth = () => {
                       Conectando...
                     </div>
                   ) : "Continuar con Facebook"}
-                </Button>
+                </Button> */}
               </div>
 
               <div className="mt-8 p-4 bg-primary/10 rounded-lg">
