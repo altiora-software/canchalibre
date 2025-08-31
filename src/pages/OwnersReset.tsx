@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Check, X } from "lucide-react";
+import { Eye, EyeOff, Check, X, RefreshCw } from "lucide-react";
 
 function parseParams() {
   const search = new URLSearchParams(window.location.search);
@@ -16,8 +16,9 @@ function parseParams() {
   return {
     access_token: get("access_token"),
     refresh_token: get("refresh_token"),
-    token_type: get("token_type") || get("type"),
     code: get("code"),
+    token: get("token"),
+    type: (get("type") || get("token_type")) || undefined,
   };
 }
 
@@ -29,49 +30,98 @@ const rules = {
   symbol: (v: string) => /[^A-Za-z0-9]/.test(v),
 };
 
-const OwnersReset = () => {
+export default function OwnersReset() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showP1, setShowP1] = useState(false);
   const [showP2, setShowP2] = useState(false);
+
+  const [checking, setChecking] = useState(true);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [status, setStatus] = useState<"idle" | "ok" | "error">("idle");
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+
   const navigate = useNavigate();
 
-  // Inicializa sesión desde el link
-  useEffect(() => {
-    (async () => {
-      setCheckingSession(true);
-      setError("");
-      const { access_token, refresh_token, code } = parseParams();
-      try {
-        if (code && !access_token && !refresh_token) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } else if (access_token && refresh_token) {
-          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-          if (error) throw error;
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-        const { data: { session } } = await supabase.auth.getSession();
-        setSessionReady(!!session);
-        if (!session) {
-          setError("El enlace no es válido o ya fue usado. Solicitá uno nuevo.");
-        }
-      } catch (e: any) {
-        setError(e?.message || "No se pudo inicializar la sesión de recuperación.");
-        setSessionReady(false);
-      } finally {
-        setCheckingSession(false);
+  // Intenta establecer sesión a partir de lo que venga en la URL
+  const tryInitSession = async () => {
+    setError("");
+    const { access_token, refresh_token, code, token, type } = parseParams();
+
+    try {
+      // 1) Hash tokens (#access_token/#refresh_token)
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (error) throw error;
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
+
+      // 2) PKCE (?code=...)
+      else if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) throw error;
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // 3) token hash (?token=...&type=recovery)
+      else if (token && (type === "recovery" || type === "recovery_token")) {
+        // Nota: algunos flows requieren email; si fuera tu caso, pedimos email y lo pasamos.
+        const { data, error } = await supabase.auth.verifyOtp({
+          type: "recovery",
+          token_hash: token,
+        } as any);
+        if (error) throw error;
+        if (!data.session) {
+          // A veces devuelve user + tokens; intentar leer sesión
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error("No se pudo crear la sesión desde el token.");
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // 4) Si no vino nada, quizá Supabase ya dejó la sesión lista
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("El enlace no es válido o ya fue usado.");
+
+      setSessionReady(true);
+      setStatus("ok");
+    } catch (e: any) {
+      console.error("[OwnersReset] init session error:", e);
+      setSessionReady(false);
+      setStatus("error");
+      setError(e?.message || "No se pudo inicializar la sesión de recuperación.");
+    }
+  };
+
+  // Efecto inicial + reintentos cortos (por si el navegador demora en devolver los tokens)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setChecking(true);
+      await tryInitSession();
+
+      if (!cancelled && !sessionReady) {
+        // pequeños reintentos de lectura de sesión (hasta ~2s)
+        for (let i = 0; i < 4; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setSessionReady(true);
+            setStatus("ok");
+            break;
+          }
+        }
+      }
+      if (!cancelled) setChecking(false);
     })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Validación en vivo
   const checks = useMemo(() => ({
     length: rules.length(password),
     lower: rules.lower(password),
@@ -81,13 +131,19 @@ const OwnersReset = () => {
     match: password.length > 0 && password === confirm,
   }), [password, confirm]);
 
-  const isValid = sessionReady &&
-    checks.length && checks.lower && checks.upper && checks.number && checks.symbol && checks.match;
+  const isValid =
+    sessionReady &&
+    checks.length &&
+    checks.lower &&
+    checks.upper &&
+    checks.number &&
+    checks.symbol &&
+    checks.match;
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
     setOk("");
+    setError("");
     if (!sessionReady) {
       setError("La sesión de recuperación no está activa. Volvé a abrir el enlace del email.");
       return;
@@ -96,6 +152,7 @@ const OwnersReset = () => {
       setError("Revisá los requisitos de la contraseña.");
       return;
     }
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
@@ -131,14 +188,14 @@ const OwnersReset = () => {
           </CardHeader>
 
           <CardContent>
-            {checkingSession && (
-              <Alert className="mb-4">
-                <AlertDescription>Validando enlace…</AlertDescription>
-              </Alert>
+            {(checking || status === "idle") && (
+              <Alert className="mb-4"><AlertDescription>Validando enlace…</AlertDescription></Alert>
             )}
-            {error && (
+            {status === "error" && (
               <Alert className="mb-4">
-                <AlertDescription className="text-destructive">{error}</AlertDescription>
+                <AlertDescription className="text-destructive">
+                  {error || "El enlace no es válido o ya fue usado."}
+                </AlertDescription>
               </Alert>
             )}
             {ok && (
@@ -155,15 +212,16 @@ const OwnersReset = () => {
                     id="p1"
                     type={showP1 ? "text" : "password"}
                     value={password}
-                    onChange={(e)=>setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
-                    disabled={!sessionReady || loading}
+                    disabled={checking || loading || status === "error"}
                     required
                   />
                   <button
                     type="button"
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
                     onClick={() => setShowP1((s) => !s)}
+                    aria-label={showP1 ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     {showP1 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -177,15 +235,16 @@ const OwnersReset = () => {
                     id="p2"
                     type={showP2 ? "text" : "password"}
                     value={confirm}
-                    onChange={(e)=>setConfirm(e.target.value)}
+                    onChange={(e) => setConfirm(e.target.value)}
                     autoComplete="new-password"
-                    disabled={!sessionReady || loading}
+                    disabled={checking || loading || status === "error"}
                     required
                   />
                   <button
                     type="button"
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground"
                     onClick={() => setShowP2((s) => !s)}
+                    aria-label={showP2 ? "Ocultar contraseña" : "Mostrar contraseña"}
                   >
                     {showP2 ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -193,23 +252,42 @@ const OwnersReset = () => {
               </div>
 
               <div className="space-y-1 bg-muted/20 rounded p-3">
-                <Row ok={checks.length} label="Mínimo 8 caracteres" />
-                <Row ok={checks.lower} label="Una letra minúscula" />
-                <Row ok={checks.upper} label="Una letra mayúscula" />
-                <Row ok={checks.number} label="Un número" />
-                <Row ok={checks.symbol} label="Un símbolo" />
-                <Row ok={checks.match} label="Coincidencia en confirmación" />
+                <Row ok={rules.length(password)} label="Mínimo 8 caracteres" />
+                <Row ok={rules.lower(password)} label="Una letra minúscula" />
+                <Row ok={rules.upper(password)} label="Una letra mayúscula" />
+                <Row ok={rules.number(password)} label="Un número" />
+                <Row ok={rules.symbol(password)} label="Un símbolo" />
+                <Row ok={password.length > 0 && password === confirm} label="Coincidencia en confirmación" />
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading || !isValid}>
-                {loading ? "Guardando…" : "Guardar contraseña"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={loading || checking || !isValid}
+                >
+                  {loading ? "Guardando…" : "Guardar contraseña"}
+                </Button>
+
+                {status === "error" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setChecking(true);
+                      await tryInitSession();
+                      setChecking(false);
+                    }}
+                    title="Reintentar validar enlace"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </form>
           </CardContent>
         </Card>
       </div>
     </>
   );
-};
-
-export default OwnersReset;
+}
