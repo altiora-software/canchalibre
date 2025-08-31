@@ -20,6 +20,7 @@ import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 import OwnersReset from "@/pages/OwnersReset";
 import ComplexDashboard from "./pages/ComplexDashboard";
+import Dashboard from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -40,12 +41,13 @@ const App = () => (
               <Route path="/owners/reset" element={<OwnersReset />} />
               <Route path="/register-complex" element={<RegisterComplex />} />
               <Route path="/complex/:id" element={<ComplexDetails />} />
-              <Route path="/dashboard" element={<ComplexDashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/my-reservations" element={<MyReservations />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/superadmin" element={<SuperAdminLogin />} />
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/owners/complex/:id" element={<ComplexDashboard />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
