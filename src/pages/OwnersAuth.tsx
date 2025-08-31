@@ -11,6 +11,60 @@ import { supabase } from "@/integrations/supabase/client";
 
 const TAG = "[OwnersAuth]";
 
+/**
+ * Redirige al dashboard del propietario:
+ * 1) Si hay owner:lastComplexId en localStorage, verifica que sea de este owner y navega ahí.
+ * 2) Sino busca el primer complejo del owner y navega ahí.
+ * 3) Si no tiene complejos, navega a /register-complex.
+ */
+async function goToOwnersComplex(navigate: (path: string, opts?: any) => void, uid: string) {
+  try {
+    // 1) Último complejo usado (validar propiedad)
+    const last = localStorage.getItem("owner:lastComplexId");
+    if (last) {
+      const { data: owned, error: ownedErr } = await supabase
+        .from("sport_complexes")
+        .select("id, owner_id")
+        .eq("id", last)
+        .eq("owner_id", uid)
+        .maybeSingle();
+
+      if (!ownedErr && owned?.id) {
+        console.log(TAG, "navigate → /owners/complex/" + owned.id, "(validated lastComplexId)");
+        navigate(`/owners/complex/${owned.id}`, { replace: true });
+        return;
+      } else {
+        console.log(TAG, "lastComplexId no es válido para este owner, lo ignoro");
+        localStorage.removeItem("owner:lastComplexId");
+      }
+    }
+
+    // 2) Buscar el primer complejo del owner
+    const { data: complexes, error } = await supabase
+      .from("sport_complexes")
+      .select("id")
+      .eq("owner_id", uid)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (!error && complexes?.[0]?.id) {
+      const cid = complexes[0].id;
+      console.log(TAG, "navigate → /owners/complex/" + cid, "(first complex of owner)");
+      localStorage.setItem("owner:lastComplexId", cid);
+      navigate(`/owners/complex/${cid}`, { replace: true });
+      return;
+    }
+
+    // 3) No tiene complejos aún
+    console.log(TAG, "navigate → /register-complex (owner without complexes)");
+    navigate("/register-complex", { replace: true });
+  } catch (e) {
+    console.error(TAG, "goToOwnersComplex error", e);
+    // fallback seguro
+    navigate("/register-complex", { replace: true });
+  }
+}
+
 const OwnersAuth = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,13 +72,6 @@ const OwnersAuth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
-
-  // ---------- Helpers ----------
-  const goDashboard = () => {
-    const target = "/dashboard"; // <-- si tu ruta real es otra, cámbiala aquí
-    console.log(TAG, "navigate →", target);
-    navigate(target, { replace: true });
-  };
 
   const fetchProfileRole = async (uid: string) => {
     console.log(TAG, "fetchProfileRole() for user_id:", uid);
@@ -38,7 +85,7 @@ const OwnersAuth = () => {
     return { data, error };
   };
 
-  // ---------- Auto-redirect si ya hay sesión ----------
+  // Auto-redirect si ya hay sesión
   useEffect(() => {
     let unsub: (() => void) | undefined;
 
@@ -49,16 +96,20 @@ const OwnersAuth = () => {
       if (uid) {
         const { data, error } = await fetchProfileRole(uid);
         if (!error && data?.role === "owner") {
-          goDashboard();
+          await goToOwnersComplex(navigate, uid);
         }
       }
 
-      // Suscripción a cambios de auth
+      // Escuchar cambios de auth (por si otra pestaña loguea)
       const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
         console.log(TAG, "onAuthStateChange →", event, !!sess);
-        if (!sess?.user) return;
-        const { data, error } = await fetchProfileRole(sess.user.id);
-        if (!error && data?.role === "owner") goDashboard();
+        const userId = sess?.user?.id;
+        if (!userId) return;
+
+        const { data, error } = await fetchProfileRole(userId);
+        if (!error && data?.role === "owner") {
+          await goToOwnersComplex(navigate, userId);
+        }
       });
 
       unsub = () => sub?.subscription?.unsubscribe();
@@ -68,7 +119,7 @@ const OwnersAuth = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Submit login ----------
+  // Submit login (propietario)
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -77,19 +128,17 @@ const OwnersAuth = () => {
     try {
       console.log(TAG, "signInWithPassword()");
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      console.log('pase, no muestro nada')
       console.log(TAG, "signInWithPassword →", { user: data?.user?.id, error });
-      console.log('pase, tengo data dentro', data)
-      console.log('pase, tengo error dentro', error)
 
       if (error) throw error;
       if (!data?.user?.id) throw new Error("No se obtuvo el usuario luego del login.");
 
-      const { data: p, error: pErr } = await fetchProfileRole(data.user.id);
+      const uid = data.user.id;
+      const { data: p, error: pErr } = await fetchProfileRole(uid);
       if (pErr) throw pErr;
 
       if (p?.role === "owner") {
-        goDashboard();
+        await goToOwnersComplex(navigate, uid);
       } else {
         await supabase.auth.signOut();
         setError("Esta cuenta no tiene permisos de propietario.");
@@ -102,7 +151,7 @@ const OwnersAuth = () => {
     }
   };
 
-  // ---------- Reset pass ----------
+  // Reset pass
   const sendReset = async () => {
     setSendingReset(true);
     setError("");
@@ -127,7 +176,7 @@ const OwnersAuth = () => {
     }
   };
 
-  // ---------- UI ----------
+  // UI
   return (
     <>
       <Helmet>
