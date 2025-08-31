@@ -1,95 +1,117 @@
-// api/admin/create-owner-and-complex.ts
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL as string;
-const SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE as string; // <-- agrega esto en Vercel
+const SUPABASE_URL = process.env.SUPABASE_URL as string;
+const SERVICE_ROLE  = process.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || 'https://canchalibre.vercel.app';
+
+async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
+  // Busca paginando. Escala chica → sobrado.
+  const perPage = 200;
+  for (let page = 1; page <= 25; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const match = data.users.find(u => (u.email || '').toLowerCase() === email.toLowerCase());
+    if (match) return match.id;
+    if (data.users.length < perPage) break; // no hay más páginas
+  }
+  return null;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  // Opcional: valida que el que llama sea tu Super Admin (p.ej. header X-ADMIN-KEY o JWT interno)
-  // ...
-
-  const { owner, complex } = req.body as {
-    owner: { email: string; full_name?: string };
-    complex: {
-      name: string; address: string; neighborhood?: string; phone?: string;
-      description?: string; website?: string; whatsapp?: string;
-    };
-  };
-
-  if (!owner?.email || !complex?.name || !complex?.address) {
-    return res.status(400).json({ error: 'Campos requeridos faltantes' });
-  }
-
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-
   try {
-    // 1) Crear (o conseguir) usuario Auth
-    // Si ya existe, no falla: lo buscamos por email
-    // Supabase no permite filtrar por email en listUsers, así que listamos y filtramos manualmente
-    const { data: existingUsers, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 100 });
-    if (listErr) throw listErr;
-    const existing = existingUsers?.users?.find((u: any) => u.email?.toLowerCase() === owner.email.toLowerCase());
-    let userId: string | null = existing?.id ?? null;
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+    const { owner, complex } = req.body as {
+      owner: { email: string; full_name?: string };
+      complex: {
+        name: string; address: string; neighborhood?: string; phone?: string;
+        website?: string; whatsapp?: string; description?: string;
+      };
+    };
+
+    if (!owner?.email || !complex?.name || !complex?.address) {
+      return res.status(400).json({ error: 'Campos requeridos faltantes' });
+    }
+    if (!SUPABASE_URL || !SERVICE_ROLE) {
+      return res.status(500).json({ error: 'Faltan SUPABASE_URL / SUPABASE_SERVICE_ROLE' });
+    }
+
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+    // 1) buscar por email
+    let userId = await findUserIdByEmail(admin, owner.email);
+
+    // 2) crear si no existe
     if (!userId) {
       const { data: created, error: createErr } = await admin.auth.admin.createUser({
         email: owner.email,
-        email_confirm: true,        // marca email como verificado
+        email_confirm: true,
       });
-      if (createErr) throw createErr;
-      userId = created.user.id;
+      if (createErr) {
+        // Si ya existía, reintenta la búsqueda
+        if ((createErr.message || '').toLowerCase().includes('already') ||
+            (createErr.message || '').toLowerCase().includes('registered')) {
+          userId = await findUserIdByEmail(admin, owner.email);
+        }
+        if (!userId) throw createErr;
+      } else {
+        userId = created.user.id;
+      }
     }
 
-    // 2) Upsert profile con role=owner
+    // 3) upsert profile como owner
     const { error: upErr } = await admin
       .from('profiles')
       .upsert({
-        id: userId,         // por compatibilidad, si tu tabla tiene id=user_id
+        id: userId, // si tu tabla usa id=user_id
         user_id: userId,
         email: owner.email,
-        full_name: owner.full_name ?? owner.email,
+        full_name: owner.full_name || owner.email,
         role: 'owner',
         is_admin: false,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id' });
     if (upErr) throw upErr;
 
-    // 3) Crear complejo
+    // 4) crear complejo
     const { data: sc, error: scErr } = await admin
       .from('sport_complexes')
       .insert([{
-        owner_id: userId,               // FK a profiles/auth.users
+        owner_id: userId,
         name: complex.name,
         address: complex.address,
         neighborhood: complex.neighborhood ?? null,
         phone: complex.phone ?? null,
         email: owner.email,
-        description: complex.description ?? null,
         website: complex.website ?? null,
         whatsapp: complex.whatsapp ?? null,
-        is_approved: true,              // o false si querés revisarlo antes
+        description: complex.description ?? null,
+        is_approved: true,
         is_active: true,
-        payment_status: 'trial',        // opcional
+        payment_status: 'trial',
         subscription_expires_at: new Date(Date.now() + 15*24*3600*1000).toISOString(),
       }])
       .select()
       .single();
     if (scErr) throw scErr;
 
-    // 4) Generar link de recuperación para que defina contraseña
-    // Podés enviarlo por email o devolverlo al panel para copiar/reenviar manualmente
+    // 5) link de recuperación para que seteé password
     const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
       type: 'recovery',
       email: owner.email,
-      options: { redirectTo: `${process.env.PUBLIC_APP_URL ?? 'https://canchalibre.vercel.app'}/owners/reset` }
+      options: { redirectTo: `${PUBLIC_APP_URL}/owners/reset` },
     });
     if (linkErr) throw linkErr;
 
-    return res.status(200).json({ ok: true, user_id: userId, complex: sc, recovery_link: link?.properties?.action_link });
+    return res.status(200).json({
+      ok: true,
+      user_id: userId,
+      complex: sc,
+      recovery_link: link?.properties?.action_link || null,
+    });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message ?? 'Internal error' });
+    console.error('[create-owner-and-complex] ERROR', e);
+    return res.status(500).json({ error: e?.message || 'Internal Server Error' });
   }
 }
