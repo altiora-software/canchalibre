@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL as string;
-const SERVICE_ROLE  = process.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+const SERVICE_ROLE  = process.env.SUPABASE_SERVICE_ROLE as string;
 const PUBLIC_APP_URL = process.env.PUBLIC_APP_URL || 'https://canchalibre.vercel.app';
 
 async function findUserIdByEmail(admin: SupabaseClient, email: string): Promise<string | null> {
