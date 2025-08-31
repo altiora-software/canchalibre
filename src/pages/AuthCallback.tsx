@@ -25,10 +25,13 @@ export default function AuthCallback() {
           .eq("user_id", uid)              // tu esquema usa user_id
           .single();
 
-        if (profile?.role === "customer") {
+        // Corregido: Verificamos si existe el campo 'role' en el perfil antes de acceder a él
+        // Fixed: Check if 'role' field exists in profile before accessing it
+        if (profile && "role" in profile && profile.role === "customer") {
           navigate("/", { replace: true });
         } else {
           // si por alguna razón no quedó como customer, bloqueamos el social login
+          // if for some reason the user is not a customer, block social login
           await supabase.auth.signOut();
           setMsg("Esta vía de acceso es solo para clientes. Ingrese por el portal correspondiente.");
           setTimeout(() => navigate("/auth", { replace: true }), 1200);
