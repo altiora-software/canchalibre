@@ -66,7 +66,7 @@ const SuperAdminLogin = () => {
   return (
     <>
       <Helmet>
-        <title>Super Admin - Canchas Jujuy</title>
+        <title>Super Admin - Cancha Libre</title>
         <meta name="description" content="Panel de acceso exclusivo para Super Administradores" />
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>

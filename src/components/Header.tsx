@@ -54,7 +54,7 @@ const Header = ({ selectedSport, onSportChange, searchTerm, onSearchChange }: He
               <span className="text-white font-bold text-sm">CJ</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Canchas Jujuy</h1>
+              <h1 className="text-xl font-bold text-foreground">Cancha Libre</h1>
               <p className="text-xs text-muted-foreground hidden sm:block">San Salvador de Jujuy</p>
             </div>
           </Link>

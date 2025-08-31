@@ -250,8 +250,8 @@ const RegisterComplex = () => {
   return (
     <>
       <Helmet>
-        <title>Registrar Complejo - Canchas Jujuy</title>
-        <meta name="description" content="Registra tu complejo deportivo en Canchas Jujuy y aumenta la visibilidad de tus canchas." />
+        <title>Registrar Complejo - Cancha Libre</title>
+        <meta name="description" content="Registra tu complejo deportivo en Cancha Libre y aumenta la visibilidad de tus canchas." />
       </Helmet>
 
       <div className="min-h-screen bg-background py-12">

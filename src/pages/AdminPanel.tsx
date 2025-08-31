@@ -42,7 +42,7 @@ const AdminPanel = () => {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>Panel Administrativo - Canchas Jujuy</title>
+        <title>Panel Administrativo - Cancha Libre</title>
         <meta name="description" content="Panel de administración para gestionar complejos deportivos, suscripciones y notificaciones" />
       </Helmet>
 

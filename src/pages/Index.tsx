@@ -87,13 +87,13 @@ const Index = () => {
   return (
     <>
       <Helmet>
-        <title>Canchas Jujuy - Encuentra las Mejores Canchas Deportivas en San Salvador de Jujuy</title>
+        <title>Cancha Libre - Encuentra las Mejores Canchas Deportivas en San Salvador de Jujuy</title>
         <meta name="description" content="Descubre y reserva canchas deportivas en San Salvador de Jujuy. Fútbol, básquet, tenis, vóley, handball y skate parks. Encuentra horarios, precios y contacta por WhatsApp." />
         <meta name="keywords" content="canchas deportivas Jujuy, fútbol 5 San Salvador, básquet Jujuy, tenis Jujuy, reservar cancha deportiva, complejos deportivos Argentina" />
-        <link rel="canonical" href="https://canchasjujuy.com" />
+        <link rel="canonical" href="https://canchalibre.com" />
         
         {/* Open Graph */}
-        <meta property="og:title" content="Canchas Jujuy - Las Mejores Canchas Deportivas" />
+        <meta property="og:title" content="Cancha Libre - Las Mejores Canchas Deportivas" />
         <meta property="og:description" content="Encuentra y reserva canchas deportivas en San Salvador de Jujuy. Más de 50 complejos disponibles." />
         <meta property="og:image" content={heroImage} />
         <meta property="og:type" content="website" />
@@ -103,7 +103,7 @@ const Index = () => {
           {JSON.stringify({
             "@context": "https://schema.org",
             "@type": "LocalBusiness",
-            "name": "Canchas Jujuy",
+            "name": "Cancha Libre",
             "description": "Plataforma para encontrar y reservar canchas deportivas en San Salvador de Jujuy",
             "address": {
               "@type": "PostalAddress",
@@ -116,7 +116,7 @@ const Index = () => {
               "latitude": -24.1858,
               "longitude": -65.3004
             },
-            "url": "https://canchasjujuy.com",
+            "url": "https://canchalibre.com",
             "telephone": "+54-388-XXX-XXXX",
             "openingHours": "Mo-Su 00:00-23:59",
             "priceRange": "$$$"
@@ -347,7 +347,7 @@ const Index = () => {
                         <Button 
                           size="lg" 
                           className="bg-gradient-sport hover:shadow-sport transition-all text-lg px-8 py-6"
-                          onClick={() => window.open('https://wa.me/5493884123456?text=Hola! Tengo un complejo deportivo y me interesa unirme a Canchas Jujuy', '_blank')}
+                          onClick={() => window.open('https://wa.me/5493884123456?text=Hola! Tengo un complejo deportivo y me interesa unirme a Cancha Libre', '_blank')}
                         >
                           📱 WhatsApp: +54 388 412-3456
                         </Button>
@@ -355,9 +355,9 @@ const Index = () => {
                           size="lg" 
                           variant="outline" 
                           className="text-lg px-8 py-6"
-                          onClick={() => window.location.href = 'mailto:complejos@canchasjujuy.com?subject=Quiero agregar mi complejo'}
+                          onClick={() => window.location.href = 'mailto:complejos@canchalibre.com?subject=Quiero agregar mi complejo'}
                         >
-                          ✉️ complejos@canchasjujuy.com
+                          ✉️ complejos@canchalibre.com
                         </Button>
                       </div>
                     </div>
@@ -372,7 +372,7 @@ const Index = () => {
             <div className="container mx-auto px-4">
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold text-foreground mb-4">
-                  ¿Por qué elegir Canchas Jujuy?
+                  ¿Por qué elegir Cancha Libre?
                 </h2>
                 <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
                   La forma más fácil de encontrar y reservar canchas deportivas en San Salvador de Jujuy
@@ -417,13 +417,13 @@ const Index = () => {
               <div className="w-8 h-8 bg-gradient-sport rounded-lg flex items-center justify-center">
                 <span className="text-white font-bold text-sm">CJ</span>
               </div>
-              <span className="text-xl font-bold">Canchas Jujuy</span>
+              <span className="text-xl font-bold">Cancha Libre</span>
             </div>
             <p className="text-white/70 mb-4">
               La plataforma líder para encontrar canchas deportivas en San Salvador de Jujuy
             </p>
             <div className="flex justify-center space-x-6 text-sm text-white/60">
-              <span>© 2024 Canchas Jujuy</span>
+              <span>© 2024 Cancha Libre</span>
               <span>•</span>
               <span>Términos</span>
               <span>•</span>

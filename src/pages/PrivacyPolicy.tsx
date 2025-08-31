@@ -10,8 +10,8 @@ const PrivacyPolicy = () => {
   return (
     <>
       <Helmet>
-        <title>Política de Privacidad - Canchas Jujuy</title>
-        <meta name="description" content="Política de privacidad de Canchas Jujuy - Cómo protegemos y utilizamos tus datos personales." />
+        <title>Política de Privacidad - Cancha Libre</title>
+        <meta name="description" content="Política de privacidad de Cancha Libre - Cómo protegemos y utilizamos tus datos personales." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-12 px-4">
@@ -41,7 +41,7 @@ const PrivacyPolicy = () => {
                 <section>
                   <h2 className="text-xl font-semibold mb-3">1. Información que Recopilamos</h2>
                   <p>
-                    En Canchas Jujuy recopilamos la siguiente información:
+                    En Cancha Libre recopilamos la siguiente información:
                   </p>
                   <ul className="list-disc list-inside ml-4 space-y-1">
                     <li>Información de contacto (nombre, email, teléfono)</li>

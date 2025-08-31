@@ -125,8 +125,8 @@ const Auth = () => {
   return (
     <>
       <Helmet>
-        <title>Iniciar Sesión - Canchas Jujuy</title>
-        <meta name="description" content="Accede a tu cuenta en Canchas Jujuy para gestionar tu complejo deportivo o crear una nueva cuenta." />
+        <title>Iniciar Sesión - Cancha Libre</title>
+        <meta name="description" content="Accede a tu cuenta en Cancha Libre para gestionar tu complejo deportivo o crear una nueva cuenta." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4">
@@ -137,7 +137,7 @@ const Auth = () => {
               <div className="w-12 h-12 bg-gradient-sport rounded-lg flex items-center justify-center shadow-lg">
                 <MapPin className="w-7 h-7 text-white" />
               </div>
-              <span className="text-3xl font-bold text-foreground">Canchas Jujuy</span>
+              <span className="text-3xl font-bold text-foreground">Cancha Libre</span>
             </div>
             <p className="text-muted-foreground text-lg">
               Encuentra y reserva canchas deportivas

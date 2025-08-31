@@ -51,8 +51,8 @@ const Dashboard = () => {
   return (
     <>
       <Helmet>
-        <title>Dashboard - Mis Complejos | Canchas Jujuy</title>
-        <meta name="description" content="Administra tus complejos deportivos registrados en Canchas Jujuy" />
+        <title>Dashboard - Mis Complejos | Cancha Libre</title>
+        <meta name="description" content="Administra tus complejos deportivos registrados en Cancha Libre" />
       </Helmet>
 
       <div className="min-h-screen bg-background">

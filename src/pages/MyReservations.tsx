@@ -87,7 +87,7 @@ const MyReservations = () => {
   return (
     <>
       <Helmet>
-        <title>Mis Reservas - Canchas Jujuy</title>
+        <title>Mis Reservas - Cancha Libre</title>
         <meta name="description" content="Gestiona todas tus reservas de canchas deportivas en San Salvador de Jujuy" />
       </Helmet>
 

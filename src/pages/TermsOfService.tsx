@@ -10,8 +10,8 @@ const TermsOfService = () => {
   return (
     <>
       <Helmet>
-        <title>Términos de Servicio - Canchas Jujuy</title>
-        <meta name="description" content="Términos y condiciones de uso de Canchas Jujuy - Plataforma de reserva de canchas deportivas en Jujuy." />
+        <title>Términos de Servicio - Cancha Libre</title>
+        <meta name="description" content="Términos y condiciones de uso de Cancha Libre - Plataforma de reserva de canchas deportivas en Jujuy." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-12 px-4">
@@ -41,7 +41,7 @@ const TermsOfService = () => {
                 <section>
                   <h2 className="text-xl font-semibold mb-3">1. Aceptación de los Términos</h2>
                   <p>
-                    Al acceder y utilizar Canchas Jujuy, aceptas cumplir con estos términos de servicio 
+                    Al acceder y utilizar Cancha Libre, aceptas cumplir con estos términos de servicio 
                     y todas las leyes y regulaciones aplicables. Si no estás de acuerdo con alguno de 
                     estos términos, no debes usar nuestro servicio.
                   </p>
@@ -50,7 +50,7 @@ const TermsOfService = () => {
                 <section>
                   <h2 className="text-xl font-semibold mb-3">2. Descripción del Servicio</h2>
                   <p>
-                    Canchas Jujuy es una plataforma digital que conecta usuarios con propietarios de 
+                    Cancha Libre es una plataforma digital que conecta usuarios con propietarios de 
                     complejos deportivos para facilitar la reserva de canchas. Actuamos como intermediarios 
                     y no somos propietarios de las instalaciones deportivas.
                   </p>
@@ -94,7 +94,7 @@ const TermsOfService = () => {
                 <section>
                   <h2 className="text-xl font-semibold mb-3">6. Responsabilidades</h2>
                   <p>
-                    Canchas Jujuy actúa como intermediario. No somos responsables por:
+                    Cancha Libre actúa como intermediario. No somos responsables por:
                   </p>
                   <ul className="list-disc list-inside ml-4 space-y-1">
                     <li>La calidad o condición de las instalaciones</li>
@@ -108,7 +108,7 @@ const TermsOfService = () => {
                   <h2 className="text-xl font-semibold mb-3">7. Propiedad Intelectual</h2>
                   <p>
                     Todo el contenido de la plataforma, incluyendo texto, gráficos, logos, y software, 
-                    es propiedad de Canchas Jujuy y está protegido por leyes de propiedad intelectual.
+                    es propiedad de Cancha Libre y está protegido por leyes de propiedad intelectual.
                   </p>
                 </section>
 

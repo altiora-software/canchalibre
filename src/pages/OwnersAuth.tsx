@@ -107,7 +107,7 @@ const OwnersAuth = () => {
               <div className="w-12 h-12 bg-gradient-sport rounded-lg flex items-center justify-center shadow-lg">
                 <MapPin className="w-7 h-7 text-white" />
               </div>
-              <span className="text-3xl font-bold text-foreground">Canchas Jujuy</span>
+              <span className="text-3xl font-bold text-foreground">Cancha Libre</span>
             </div>
             <h1 className="text-2xl font-bold text-foreground mb-2">Portal de Propietarios</h1>
             <p className="text-muted-foreground">Acceso exclusivo para dueños de complejos</p>

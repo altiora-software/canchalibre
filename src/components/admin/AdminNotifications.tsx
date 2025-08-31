@@ -54,7 +54,7 @@ Para continuar disfrutando de todos los beneficios de nuestra plataforma, te inv
 ¡No pierdas la oportunidad de seguir gestionando tu complejo deportivo de manera eficiente!
 
 Saludos,
-Equipo Canchas Jujuy`,
+Equipo Cancha Libre`,
       type: 'trial_ending'
     },
     {
@@ -70,7 +70,7 @@ Para reactivar tu complejo y seguir recibiendo reservas, es necesario que renuev
 Contacta con nosotros para resolver esta situación cuanto antes.
 
 Saludos,
-Equipo Canchas Jujuy`,
+Equipo Cancha Libre`,
       type: 'subscription_expired'
     },
     {
@@ -83,10 +83,10 @@ Tu complejo {complex_name} ha sido aprobado y ya está disponible en nuestra pla
 
 Ahora tienes 15 días de prueba gratuita para que puedas probar todas las funcionalidades.
 
-¡Bienvenido a Canchas Jujuy!
+¡Bienvenido a Cancha Libre!
 
 Saludos,
-Equipo Canchas Jujuy`,
+Equipo Cancha Libre`,
       type: 'approval_approved'
     },
     {
@@ -102,7 +102,7 @@ Motivo: {rejection_reason}
 Por favor, realiza las correcciones necesarias y vuelve a enviar tu solicitud.
 
 Saludos,
-Equipo Canchas Jujuy`,
+Equipo Cancha Libre`,
       type: 'approval_rejected'
     }
   ];
