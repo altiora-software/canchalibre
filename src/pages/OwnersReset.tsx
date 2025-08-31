@@ -54,8 +54,51 @@ export default function OwnersReset() {
         window.location.search.includes("type=recovery");
 
       if (looksLikeAuthReturn) {
-        const { data, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
-        console.log(TAG, "getSessionFromUrl()", { data, error });
+        // getSessionFromUrl ya no existe; usar setSession y parsear tokens manualmente si es necesario
+        // Supabase recomienda usar auth.exchangeCodeForSession para flujos PKCE/código
+        // Aquí intentamos ambos métodos según lo que haya en la URL
+
+        let error = null;
+        let data = null;
+
+        if (window.location.search.includes("code=")) {
+          // Intercambio de código (PKCE)
+          const code = new URLSearchParams(window.location.search).get("code");
+          if (code) {
+            const { data: exData, error: exError } = await supabase.auth.exchangeCodeForSession(code);
+            data = exData;
+            error = exError;
+            console.log(TAG, "exchangeCodeForSession()", { data, error });
+          }
+        } else if (window.location.hash.includes("access_token")) {
+          // Recuperación por hash (token en el hash)
+          // Extraer tokens del hash y setear sesión manualmente
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+          const access_token = hashParams.get("access_token");
+          const refresh_token = hashParams.get("refresh_token");
+          if (access_token && refresh_token) {
+            const { data: setData, error: setError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+            data = setData;
+            error = setError;
+            console.log(TAG, "setSession()", { data, error });
+          }
+        } else if (window.location.search.includes("type=recovery") && window.location.search.includes("token=")) {
+          // Recuperación por email (token en query)
+          const token = new URLSearchParams(window.location.search).get("token");
+          if (token) {
+            const { data: setData, error: setError } = await supabase.auth.setSession({
+              access_token: token,
+              refresh_token: token,
+            });
+            data = setData;
+            error = setError;
+            console.log(TAG, "setSession() (recovery)", { data, error });
+          }
+        }
+
         if (error) throw error;
 
         // Limpia la URL para ocultar tokens
