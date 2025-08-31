@@ -17,26 +17,45 @@ const OwnersAuth = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  // Si ya hay sesión, verificamos el rol y redirigimos a /dashboard si es owner
   useEffect(() => {
-    // si ya está logueado verificar que sea owner
     const run = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const uid = session?.user?.id;
       if (!uid) return;
 
-      const { data: p } = await supabase
+      const { data: p, error: pErr } = await supabase
         .from("profiles")
         .select("role, is_admin")
         .eq("user_id", uid)
         .single();
 
-        if (p && (p as any).role === "owner") {
-          navigate("/admin", { replace: true }); // o tu dashboard de dueños
-        } else {
+      if (pErr) {
+        // en caso de que no exista perfil: cerrar sesión para evitar estados raros
+        await supabase.auth.signOut();
+        return;
+      }
+
+      if (p && (p as any).role === "owner") {
+        navigate("/dashboard", { replace: true });
+      } else {
         await supabase.auth.signOut();
       }
     };
     run();
+
+    // también escuchamos cambios de auth (por si otra pestaña loguea)
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) return;
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("user_id", session.user.id)
+        .single();
+      if (p?.role === "owner") navigate("/dashboard", { replace: true });
+    });
+
+    return () => { sub?.subscription?.unsubscribe(); };
   }, [navigate]);
 
   const onLogin = async (e: React.FormEvent) => {
@@ -45,21 +64,19 @@ const OwnersAuth = () => {
     setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-      const { data: p } = await supabase
+      const { data: p, error: pErr } = await supabase
         .from("profiles")
         .select("role, is_admin")
         .eq("user_id", data.user.id)
         .single();
 
-      // Verifica que p exista y tenga la propiedad 'role' igual a 'owner'
+      if (pErr) throw pErr;
+
       if (p && (p as any).role === "owner") {
-        navigate("/admin", { replace: true }); // o tu dashboard de dueños
+        navigate("/dashboard", { replace: true });
       } else {
         await supabase.auth.signOut();
         setError("Esta cuenta no tiene permisos de propietario.");
@@ -82,7 +99,7 @@ const OwnersAuth = () => {
           : "https://canchalibre.vercel.app";
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${base}/owners/reset`, // página para setear nueva contraseña
+        redirectTo: `${base}/owners/reset`,
       });
       if (error) throw error;
       alert("Te enviamos un email con el enlace para restablecer tu contraseña.");
