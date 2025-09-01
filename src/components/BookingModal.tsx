@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +13,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+/** Helpers locales para manejar fecha/hora en formato consistente */
+const pad = (n: number) => n.toString().padStart(2, "0");
+const formatLocalDateYYYYMMDD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+type FreeSlot = { start: string; end: string }; // coincide con lo que devuelve fetchAvailableSlots
+
 interface BookingModalProps {
   complex: SportComplexData;
   isOpen: boolean;
@@ -24,52 +29,64 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { createReservation, fetchAvailableSlots, checkSlotAvailability } = useReservations();
-  
+
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedCourt, setSelectedCourt] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<'mercado_pago' | 'transfer' | 'cash'>('mercado_pago');
+  const [paymentMethod, setPaymentMethod] = useState<"mercado_pago" | "transfer" | "cash">("mercado_pago");
   const [notes, setNotes] = useState<string>("");
-  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<FreeSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
-  // Generate time slots for the day (every hour from 9 AM to 10 PM)
-  const generateTimeSlots = () => {
-    const slots = [];
-    for (let hour = 9; hour <= 22; hour++) {
-      const timeString = `${hour.toString().padStart(2, '0')}:00`;
-      slots.push(timeString);
-    }
-    return slots;
-  };
-
-  const timeSlots = generateTimeSlots();
-
+  /** Cargar slots libres cuando cambian cancha/fecha */
   useEffect(() => {
-    if (selectedCourt && selectedDate) {
-      fetchAvailableSlots(selectedCourt, selectedDate.toISOString().split('T')[0])
-        .then(setAvailableSlots);
-    }
-  }, [selectedCourt, selectedDate]);
+    (async () => {
+      if (!selectedCourt || !selectedDate) return;
+      const dateStr = formatLocalDateYYYYMMDD(selectedDate);
+      const slots = await fetchAvailableSlots(selectedCourt, dateStr);
+      setAvailableSlots(slots);
+      setStartTime("");
+      setEndTime("");
+    })();
+  }, [selectedCourt, selectedDate, fetchAvailableSlots]);
 
+  /** Recalcular precio cuando cambia selección */
   useEffect(() => {
-    if (selectedCourt && startTime && endTime) {
-      calculatePrice();
-    }
-  }, [selectedCourt, startTime, endTime]);
-
-  const calculatePrice = () => {
-    const court = complex.courts?.find(c => c.id === selectedCourt);
-    if (!court || !startTime || !endTime) return;
-
-    const start = parseInt(startTime.split(':')[0]);
-    const end = parseInt(endTime.split(':')[0]);
-    const hours = end - start;
-    
+    if (!selectedCourt || !startTime || !endTime) return;
+    const court = complex.courts?.find((c) => c.id === selectedCourt);
+    if (!court) return;
+    const startHour = parseInt(startTime.split(":")[0], 10);
+    const endHour = parseInt(endTime.split(":")[0], 10);
+    const hours = Math.max(0, endHour - startHour);
     const hourlyPrice = court.hourly_price || 2000;
     setTotalPrice(hours * hourlyPrice);
+  }, [complex.courts, selectedCourt, startTime, endTime]);
+
+  /** Opciones para hora de inicio = todos los inicios de slots libres */
+  const startOptions = Array.from(new Set(availableSlots.map((s) => s.start))).sort();
+
+  /** Dadas las startTime seleccionada, listar posibles horas de fin contiguas (bloques de 1h) */
+  const endOptionsFrom = (start?: string) => {
+    if (!start) return [];
+    const starts = new Set(availableSlots.map((s) => s.start));
+    const ends = new Set(availableSlots.map((s) => s.end));
+    const out: string[] = [];
+    let cur = start;
+
+    while (true) {
+      const [h, m] = cur.split(":").map(Number);
+      const nextEnd = `${pad(h + 1)}:${pad(m)}`;
+      if (!ends.has(nextEnd)) break; // no existe un slot que termine a esta hora
+      out.push(nextEnd);
+
+      // Para extender 2h, 3h, etc., el siguiente bloque debe comenzar donde terminó el anterior
+      const nextStart = nextEnd;
+      if (!starts.has(nextStart)) break;
+      cur = nextStart;
+    }
+    return out;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -78,7 +95,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
       toast({
         title: "Error",
         description: "Por favor completa todos los campos requeridos",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -86,121 +103,110 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
     setLoading(true);
 
     try {
-      // Check availability first
-      const isAvailable = await checkSlotAvailability(
-        selectedCourt,
-        selectedDate.toISOString().split('T')[0],
-        startTime,
-        endTime
-      );
+      const dateStr = formatLocalDateYYYYMMDD(selectedDate);
 
+      // Validar disponibilidad real antes de insertar
+      const isAvailable = await checkSlotAvailability(selectedCourt, dateStr, startTime, endTime);
       if (!isAvailable) {
         toast({
           title: "Error",
           description: "El horario seleccionado ya no está disponible",
-          variant: "destructive"
+          variant: "destructive",
         });
         setLoading(false);
         return;
       }
 
-      const depositAmount = paymentMethod === 'cash' ? totalPrice * 0.3 : 0; // 30% deposit for cash
+      const depositAmount = paymentMethod === "cash" ? totalPrice * 0.3 : 0;
 
       const reservationData = {
         user_id: user.id,
         complex_id: complex.id,
         court_id: selectedCourt,
-        reservation_date: selectedDate.toISOString().split('T')[0],
+        reservation_date: dateStr,
         start_time: startTime,
         end_time: endTime,
         total_price: totalPrice,
         payment_method: paymentMethod,
-        payment_status: paymentMethod === 'cash' ? 'pending' : 'pending' as any,
+        payment_status: "pending" as const,
         deposit_amount: depositAmount,
         deposit_paid: false,
-        notes: notes || undefined
+        notes: notes || undefined,
       };
 
-      const { data, error } = await createReservation(reservationData);
-
+      const { data, error } = await createReservation(reservationData as any);
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: error, variant: "destructive" });
         setLoading(false);
         return;
       }
 
-      // Handle payment based on method
-      if (paymentMethod === 'mercado_pago') {
+      // Flujo de notificación/pago según método
+      if (paymentMethod === "mercado_pago") {
         await handleMercadoPagoPayment(data.id);
-      } else if (paymentMethod === 'transfer') {
+      } else if (paymentMethod === "transfer") {
         await handleBankTransfer(data);
       } else {
         await handleCashPayment(data);
       }
-
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
-        variant: "destructive"
+        description: error.message || "Ocurrió un error al crear la reserva",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const sendWhatsAppNotification = async (reservation: any, paymentMethod: string) => {
+  const sendWhatsAppNotification = async (reservation: any, payMethod: string) => {
     try {
-      const court = complex.courts?.find(c => c.id === selectedCourt);
-
-      console.log('complex',complex);
-
-      const message = `🏟️ *NUEVA RESERVA*\n\n` +
+      const court = complex.courts?.find((c) => c.id === selectedCourt);
+      const message =
+        `🏟️ *NUEVA RESERVA*\n\n` +
         `📍 Complejo: ${complex.name}\n` +
         `🏐 Cancha: ${court?.name} (${court?.sport})\n` +
-        `📅 Fecha: ${selectedDate?.toLocaleDateString('es-ES')}\n` +
+        `📅 Fecha: ${selectedDate?.toLocaleDateString("es-ES")}\n` +
         `🕐 Horario: ${startTime} - ${endTime}\n` +
         `💰 Total: $${totalPrice}\n` +
-        `💳 Método de pago: ${paymentMethod === 'transfer' ? 'Transferencia' : paymentMethod === 'cash' ? 'Efectivo' : 'MercadoPago'}\n` +
-        `${paymentMethod === 'cash' ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ''}` +
-        `${notes ? `📝 Notas: ${notes}\n` : ''}` +
+        `💳 Método de pago: ${
+          payMethod === "transfer" ? "Transferencia" : payMethod === "cash" ? "Efectivo" : "MercadoPago"
+        }\n` +
+        `${payMethod === "cash" ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ""}` +
+        `${notes ? `📝 Notas: ${notes}\n` : ""}` +
         `\n📞 Contactar al cliente para confirmar`;
 
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
+      const { data, error } = await supabase.functions.invoke("send-whatsapp-notification", {
         body: {
-          phoneNumber: complex.whatsapp || complex.phone || '5493884486112',
+          phoneNumber: complex.whatsapp || complex.phone || "5493884486112",
           message,
           complexName: complex.name,
-          reservationId: reservation.id
-        }
+          reservationId: reservation.id,
+        },
       });
 
       if (error) throw error;
-
       return data;
     } catch (error: any) {
-      console.error('Error sending WhatsApp notification:', error);
+      console.error("Error sending WhatsApp notification:", error);
       throw error;
     }
   };
 
   const handleMercadoPagoPayment = async (reservationId: string) => {
     try {
-      await sendWhatsAppNotification({ id: reservationId }, 'mercado_pago');
+      await sendWhatsAppNotification({ id: reservationId }, "mercado_pago");
       toast({
         title: "Reserva creada",
-        description: "Se ha enviado la notificación por WhatsApp. Te contactaremos para coordinar el pago por MercadoPago."
+        description: "Se envió la notificación por WhatsApp. Te contactaremos para coordinar el pago por MercadoPago.",
       });
       onClose();
-    } catch (error: any) {
+    } catch {
       toast({
         title: "Error",
         description: "Reserva creada pero no se pudo enviar la notificación",
-        variant: "destructive"
+        variant: "destructive",
       });
       onClose();
     }
@@ -208,16 +214,16 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
   const handleBankTransfer = async (reservation: any) => {
     try {
-      await sendWhatsAppNotification(reservation, 'transfer');
+      await sendWhatsAppNotification(reservation, "transfer");
       toast({
         title: "Reserva creada",
-        description: "Se ha enviado la notificación por WhatsApp. Te contactaremos con los datos para la transferencia."
+        description: "Se envió la notificación por WhatsApp. Te contactaremos con los datos para la transferencia.",
       });
       onClose();
-    } catch (error: any) {
+    } catch {
       toast({
         title: "Reserva creada",
-        description: "Te contactaremos con los datos para la transferencia bancaria"
+        description: "Te contactaremos con los datos para la transferencia bancaria",
       });
       onClose();
     }
@@ -226,27 +232,24 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const handleCashPayment = async (reservation: any) => {
     try {
       const depositAmount = totalPrice * 0.3;
-      await sendWhatsAppNotification(reservation, 'cash');
+      await sendWhatsAppNotification(reservation, "cash");
       toast({
         title: "Reserva creada",
-        description: `Se ha enviado la notificación por WhatsApp. Debes pagar una seña de $${depositAmount} para confirmar tu reserva.`
+        description: `Se envió la notificación por WhatsApp. Debes pagar una seña de $${Math.round(
+          depositAmount
+        )} para confirmar tu reserva.`,
       });
       onClose();
-    } catch (error: any) {
+    } catch {
       const depositAmount = totalPrice * 0.3;
       toast({
         title: "Reserva creada",
-        description: `Debes pagar una seña de $${depositAmount} para confirmar tu reserva. Te contactaremos para coordinar el pago.`
+        description: `Debes pagar una seña de $${Math.round(
+          depositAmount
+        )} para confirmar tu reserva. Te contactaremos para coordinar el pago.`,
       });
       onClose();
     }
-  };
-
-  const isTimeSlotAvailable = (time: string) => {
-    if (!selectedDate || !selectedCourt) return true;
-    
-    // This is a simplified check - in a real app you'd check against actual reservations
-    return true;
   };
 
   return (
@@ -284,7 +287,10 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
               mode="single"
               selected={selectedDate}
               onSelect={setSelectedDate}
-              disabled={(date) => date < new Date() || date > new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}
+              disabled={(date) =>
+                date < new Date(new Date().setHours(0, 0, 0, 0)) ||
+                date > new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              }
               className="rounded-md border w-fit"
             />
           </div>
@@ -293,13 +299,23 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Hora de inicio</Label>
-              <Select value={startTime} onValueChange={setStartTime}>
+              <Select value={startTime} onValueChange={(v) => { setStartTime(v); setEndTime(""); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
+                  <SelectValue placeholder={selectedCourt && selectedDate ? "Seleccionar" : "Elegí cancha y fecha"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.slice(0, -1).map((time) => (
-                    <SelectItem key={time} value={time} disabled={!isTimeSlotAvailable(time)}>
+                  {(!selectedCourt || !selectedDate) && (
+                    <SelectItem value="__none__" disabled>
+                      Elegí cancha y fecha
+                    </SelectItem>
+                  )}
+                  {selectedCourt && selectedDate && startOptions.length === 0 && (
+                    <SelectItem value="__no__" disabled>
+                      No hay horarios disponibles
+                    </SelectItem>
+                  )}
+                  {startOptions.map((time) => (
+                    <SelectItem key={time} value={time}>
                       {time}
                     </SelectItem>
                   ))}
@@ -309,21 +325,27 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
             <div className="space-y-2">
               <Label>Hora de fin</Label>
-              <Select value={endTime} onValueChange={setEndTime}>
+              <Select value={endTime} onValueChange={setEndTime} disabled={!startTime}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
+                  <SelectValue placeholder={startTime ? "Seleccionar" : "Elegí hora de inicio"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {timeSlots.filter(time => {
-                    if (!startTime) return false;
-                    const startHour = parseInt(startTime.split(':')[0]);
-                    const timeHour = parseInt(time.split(':')[0]);
-                    return timeHour > startHour;
-                  }).map((time) => (
-                    <SelectItem key={time} value={time}>
-                      {time}
+                  {!startTime && (
+                    <SelectItem value="__startfirst__" disabled>
+                      Elegí hora de inicio
                     </SelectItem>
-                  ))}
+                  )}
+                  {startTime && endOptionsFrom(startTime).length === 0 && (
+                    <SelectItem value="__noend__" disabled>
+                      No hay extensión disponible
+                    </SelectItem>
+                  )}
+                  {startTime &&
+                    endOptionsFrom(startTime).map((time) => (
+                      <SelectItem key={time} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -333,11 +355,11 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           <div className="space-y-2">
             <Label>Método de pago</Label>
             <div className="grid grid-cols-1 gap-3">
-              <div 
+              <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'mercado_pago' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                  paymentMethod === "mercado_pago" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                 }`}
-                onClick={() => setPaymentMethod('mercado_pago')}
+                onClick={() => setPaymentMethod("mercado_pago")}
               >
                 <div className="flex items-center gap-3">
                   <CreditCard className="w-5 h-5 text-blue-600" />
@@ -348,11 +370,11 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
                 </div>
               </div>
 
-              <div 
+              <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'transfer' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                  paymentMethod === "transfer" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                 }`}
-                onClick={() => setPaymentMethod('transfer')}
+                onClick={() => setPaymentMethod("transfer")}
               >
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-5 h-5 text-green-600" />
@@ -363,18 +385,18 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
                 </div>
               </div>
 
-              <div 
+              <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                  paymentMethod === "cash" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
                 }`}
-                onClick={() => setPaymentMethod('cash')}
+                onClick={() => setPaymentMethod("cash")}
               >
                 <div className="flex items-center gap-3">
                   <DollarSign className="w-5 h-5 text-orange-600" />
                   <div>
                     <p className="font-medium">Efectivo</p>
                     <p className="text-sm text-muted-foreground">
-                      Seña del 30% requerida ({totalPrice > 0 ? `$${Math.round(totalPrice * 0.3)}` : '$0'})
+                      Seña del 30% requerida ({totalPrice > 0 ? `$${Math.round(totalPrice * 0.3)}` : "$0"})
                     </p>
                   </div>
                 </div>
@@ -385,12 +407,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           {/* Notes */}
           <div className="space-y-2">
             <Label>Notas adicionales (opcional)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Cualquier información adicional..."
-              rows={3}
-            />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cualquier información adicional..." rows={3} />
           </div>
 
           {/* Price Summary */}
@@ -402,10 +419,8 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
                   ${totalPrice}
                 </Badge>
               </div>
-              {paymentMethod === 'cash' && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Seña requerida: ${Math.round(totalPrice * 0.3)} (30%)
-                </p>
+              {paymentMethod === "cash" && (
+                <p className="text-sm text-muted-foreground mt-2">Seña requerida: ${Math.round(totalPrice * 0.3)} (30%)</p>
               )}
             </div>
           )}

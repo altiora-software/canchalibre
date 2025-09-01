@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+// src/hooks/useReservations.ts
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface ReservationData {
   id: string;
   user_id: string;
   complex_id: string;
   court_id: string;
-  reservation_date: string;
-  start_time: string;
-  end_time: string;
+  reservation_date: string; // YYYY-MM-DD
+  start_time: string;       // HH:mm
+  end_time: string;         // HH:mm
   total_price: number;
-  payment_method: 'mercado_pago' | 'transfer' | 'cash';
-  payment_status: 'pending' | 'confirmed' | 'paid' | 'cancelled';
+  payment_method: "mercado_pago" | "transfer" | "cash";
+  payment_status: "pending" | "confirmed" | "paid" | "cancelled";
   deposit_amount: number;
   deposit_paid: boolean;
   mercadopago_payment_id?: string;
@@ -20,15 +21,53 @@ export interface ReservationData {
   updated_at: string;
 }
 
+// Fila de disponibilidad (DB)
 export interface TimeSlot {
   id: string;
   court_id: string;
-  day_of_week: number;
-  start_time: string;
-  end_time: string;
+  day_of_week: number;  // 0..6 (0=domingo)
+  start_time: string;   // "HH:mm"
+  end_time: string;     // "HH:mm"
   is_available: boolean;
 }
 
+// Slot libre concreto (derivado de availability – reservations)
+export interface FreeSlot {
+  start: string; // "HH:mm"
+  end: string;   // "HH:mm"
+}
+
+/* ----------------------- helpers de tiempo ----------------------- */
+const pad = (n: number) => n.toString().padStart(2, "0");
+const timeToMin = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + (m || 0);
+};
+const minToTime = (min: number) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${pad(h)}:${pad(m)}`;
+};
+const sameDaySafe = (yyyy_mm_dd: string) =>
+  new Date(`${yyyy_mm_dd}T00:00:00`); // evita corrimiento por timezone
+
+const buildBaseSlots = (ranges: { start_time: string; end_time: string }[], stepMin = 60): FreeSlot[] => {
+  const out: FreeSlot[] = [];
+  for (const r of ranges) {
+    let t = timeToMin(r.start_time);
+    const end = timeToMin(r.end_time);
+    while (t + stepMin <= end) {
+      out.push({ start: minToTime(t), end: minToTime(t + stepMin) });
+      t += stepMin;
+    }
+  }
+  return out;
+};
+
+const overlaps = (a: FreeSlot, b: FreeSlot) =>
+  timeToMin(a.start) < timeToMin(b.end) && timeToMin(b.start) < timeToMin(a.end);
+
+/* ------------------------ hook principal ------------------------ */
 export const useReservations = () => {
   const [reservations, setReservations] = useState<ReservationData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,126 +76,164 @@ export const useReservations = () => {
   const fetchUserReservations = async () => {
     try {
       setLoading(true);
+      setError(null);
+
       const { data, error } = await supabase
-        .from('reservations')
+        .from("reservations")
         .select(`
           *,
           sport_complexes (name, address),
           sport_courts (name, sport)
         `)
-        .order('reservation_date', { ascending: true });
+        .order("reservation_date", { ascending: true });
 
       if (error) throw error;
-      
-      // Transform data to match our interface
-      const formattedReservations = data?.map((reservation: any) => ({
-        id: reservation.id,
-        user_id: reservation.user_id,
-        complex_id: reservation.complex_id,
-        court_id: reservation.court_id,
-        reservation_date: reservation.reservation_date,
-        start_time: reservation.start_time,
-        end_time: reservation.end_time,
-        total_price: reservation.total_price,
-        payment_method: reservation.payment_method as 'mercado_pago' | 'transfer' | 'cash',
-        payment_status: reservation.payment_status as 'pending' | 'confirmed' | 'paid' | 'cancelled',
-        deposit_amount: reservation.deposit_amount || 0,
-        deposit_paid: reservation.deposit_paid || false,
-        mercadopago_payment_id: reservation.mercadopago_payment_id,
-        notes: reservation.notes,
-        created_at: reservation.created_at,
-        updated_at: reservation.updated_at,
-      })) || [];
-      
-      setReservations(formattedReservations);
+
+      const formatted: ReservationData[] =
+        (data ?? []).map((r: any) => ({
+          id: r.id,
+          user_id: r.user_id,
+          complex_id: r.complex_id,
+          court_id: r.court_id,
+          reservation_date: r.reservation_date,
+          start_time: r.start_time,
+          end_time: r.end_time,
+          total_price: r.total_price,
+          payment_method: r.payment_method,
+          payment_status: r.payment_status,
+          deposit_amount: r.deposit_amount ?? 0,
+          deposit_paid: r.deposit_paid ?? false,
+          mercadopago_payment_id: r.mercadopago_payment_id ?? undefined,
+          notes: r.notes ?? undefined,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        })) || [];
+
+      setReservations(formatted);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message ?? "Error al obtener reservas");
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchAvailableSlots = async (courtId: string, date: string) => {
+  /**
+   * Devuelve **slots libres** (p.ej. de 1h) para una cancha y fecha.
+   * Mantiene el mismo nombre que ya usás: fetchAvailableSlots(courtId, date)
+   * `date` debe ser "YYYY-MM-DD" (fecha local).
+   */
+  const fetchAvailableSlots = async (
+    courtId: string,
+    date: string,
+    stepMin = 60
+  ): Promise<FreeSlot[]> => {
     try {
-      const dayOfWeek = new Date(date).getDay();
-      const { data, error } = await supabase
-        .from('court_availability')
-        .select('*')
-        .eq('court_id', courtId)
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_available', true);
+      const d = sameDaySafe(date);
+      const dayOfWeek = d.getDay(); // 0..6
 
-      if (error) throw error;
-      return data || [];
-    } catch (err: any) {
-      console.error('Error fetching available slots:', err);
+      // 1) disponibilidad del día
+      const { data: avail, error: e1 } = await supabase
+        .from("court_availability")
+        .select("start_time,end_time,is_available")
+        .eq("court_id", courtId)
+        .eq("day_of_week", dayOfWeek)
+        .eq("is_available", true);
+
+      if (e1) throw e1;
+
+      const ranges = (avail ?? []).map((a) => ({
+        start_time: a.start_time,
+        end_time: a.end_time,
+      }));
+
+      if (ranges.length === 0) return []; // no abre ese día
+
+      // 2) reservas ocupadas del día
+      const { data: res, error: e2 } = await supabase
+        .from("reservations")
+        .select("start_time,end_time")
+        .eq("court_id", courtId)
+        .eq("reservation_date", date)
+        .in("payment_status", ["pending", "confirmed", "paid"]); // consideramos canceladas como libres
+
+      if (e2) throw e2;
+
+      const busy: FreeSlot[] = (res ?? []).map((r) => ({
+        start: r.start_time,
+        end: r.end_time,
+      }));
+
+      // 3) slots base menos ocupados
+      const base = buildBaseSlots(ranges, stepMin);
+      return base.filter((s) => !busy.some((b) => overlaps(s, b)));
+    } catch (err) {
+      console.error("Error fetching available slots:", err);
       return [];
     }
   };
 
+  /**
+   * Verifica si TODO el rango [startTime, endTime) está libre.
+   * Mantiene la firma original.
+   */
   const checkSlotAvailability = async (
-    courtId: string, 
-    date: string, 
-    startTime: string, 
+    courtId: string,
+    date: string,
+    startTime: string,
     endTime: string
-  ) => {
+  ): Promise<boolean> => {
     try {
-      const { data, error } = await supabase
-        .from('reservations')
-        .select('start_time, end_time')
-        .eq('court_id', courtId)
-        .eq('reservation_date', date)
-        .neq('payment_status', 'cancelled');
-
-      if (error) throw error;
-      
-      // Check for time overlaps manually since Supabase doesn't have overlaps function
-      const hasConflict = data?.some((reservation: any) => {
-        const existingStart = reservation.start_time;
-        const existingEnd = reservation.end_time;
-        return (startTime < existingEnd && endTime > existingStart);
-      });
-      
-      return !hasConflict;
-    } catch (err: any) {
-      console.error('Error checking availability:', err);
+      const free = await fetchAvailableSlots(courtId, date);
+      // necesitamos que cada bloque de 1h entre start y end esté libre
+      for (let t = timeToMin(startTime); t < timeToMin(endTime); t += 60) {
+        const s = { start: minToTime(t), end: minToTime(t + 60) };
+        if (!free.some((f) => f.start === s.start && f.end === s.end)) {
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error("Error checking availability:", err);
       return false;
     }
   };
 
-  const createReservation = async (reservationData: Omit<ReservationData, 'id' | 'created_at' | 'updated_at'>) => {
+  const createReservation = async (
+    reservationData: Omit<ReservationData, "id" | "created_at" | "updated_at">
+  ) => {
     try {
       const { data, error } = await supabase
-        .from('reservations')
+        .from("reservations")
         .insert([reservationData])
         .select()
         .single();
-
       if (error) throw error;
-      return { data, error: null };
+      return { data, error: null as any };
     } catch (err: any) {
-      return { data: null, error: err.message };
+      return { data: null, error: err.message ?? "No se pudo crear la reserva" };
     }
   };
 
-  const updateReservationStatus = async (reservationId: string, status: string, paymentId?: string) => {
+  const updateReservationStatus = async (
+    reservationId: string,
+    status: string,
+    paymentId?: string
+  ) => {
     try {
       const updateData: any = { payment_status: status };
-      if (paymentId) {
-        updateData.mercadopago_payment_id = paymentId;
-      }
+      if (paymentId) updateData.mercadopago_payment_id = paymentId;
 
       const { data, error } = await supabase
-        .from('reservations')
+        .from("reservations")
         .update(updateData)
-        .eq('id', reservationId)
+        .eq("id", reservationId)
         .select()
         .single();
-
       if (error) throw error;
-      return { data, error: null };
+
+      return { data, error: null as any };
     } catch (err: any) {
-      return { data: null, error: err.message };
+      return { data: null, error: err.message ?? "No se pudo actualizar el estado" };
     }
   };
 
@@ -169,10 +246,10 @@ export const useReservations = () => {
     loading,
     error,
     fetchUserReservations,
-    fetchAvailableSlots,
-    checkSlotAvailability,
+    fetchAvailableSlots,   // ahora devuelve FreeSlot[]  [{start,end}, ...]
+    checkSlotAvailability, // usa los slots libres reales
     createReservation,
     updateReservationStatus,
-    refetch: fetchUserReservations
+    refetch: fetchUserReservations,
   };
 };
