@@ -122,55 +122,77 @@ export const useReservations = () => {
    * Mantiene el mismo nombre que ya usás: fetchAvailableSlots(courtId, date)
    * `date` debe ser "YYYY-MM-DD" (fecha local).
    */
-  const fetchAvailableSlots = async (
-    courtId: string,
-    date: string,
-    stepMin = 60
-  ): Promise<FreeSlot[]> => {
-    try {
-      const d = sameDaySafe(date);
-      const dayOfWeek = d.getDay(); // 0..6
+    type FreeSlot = { start: string; end: string };
 
-      // 1) disponibilidad del día
-      const { data: avail, error: e1 } = await supabase
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const timeToMin = (hhmm: string) => {
+      const [h, m] = hhmm.split(":").map(Number);
+      return h * 60 + (m || 0);
+    };
+    const minToTime = (min: number) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+    const normTime = (t: string) => t.slice(0, 5); // "09:00:00" -> "09:00"
+
+    const buildBaseSlots = (ranges: { start_time: string; end_time: string }[], stepMin = 60): FreeSlot[] => {
+      const out: FreeSlot[] = [];
+      for (const r of ranges) {
+        let t = timeToMin(normTime(r.start_time));
+        const end = timeToMin(normTime(r.end_time));
+        while (t + stepMin <= end) {
+          out.push({ start: minToTime(t), end: minToTime(t + stepMin) });
+          t += stepMin;
+        }
+      }
+      return out;
+    };
+
+    const overlaps = (a: FreeSlot, b: FreeSlot) =>
+      timeToMin(a.start) < timeToMin(b.end) && timeToMin(b.start) < timeToMin(a.end);
+
+    /** ✅ ahora funciona tanto si guardaste day_of_week como 0–6 o 1–7 */
+    async function fetchAvailableSlots(
+      courtId: string,
+      dateStr: string,     // "YYYY-MM-DD"
+      stepMin = 60
+    ): Promise<FreeSlot[]> {
+      const d = new Date(`${dateStr}T00:00:00`);
+      const dow = d.getDay();                    // 0..6 (Sun=0)
+      const isoDow = ((dow + 6) % 7) + 1;        // 1..7 (Mon=1..Sun=7)
+
+      // 1) Disponibilidad del día (consultamos ambas convenciones)
+      const { data: availability, error: e1 } = await supabase
         .from("court_availability")
-        .select("start_time,end_time,is_available")
+        .select("day_of_week,start_time,end_time,is_available")
         .eq("court_id", courtId)
-        .eq("day_of_week", dayOfWeek)
-        .eq("is_available", true);
+        .in("day_of_week", [dow, isoDow]);
 
       if (e1) throw e1;
 
-      const ranges = (avail ?? []).map((a) => ({
-        start_time: a.start_time,
-        end_time: a.end_time,
-      }));
+      const openRanges = (availability ?? [])
+        .filter((r) => r.is_available === true)
+        .map((r) => ({ start_time: normTime(r.start_time), end_time: normTime(r.end_time) }));
 
-      if (ranges.length === 0) return []; // no abre ese día
+      if (openRanges.length === 0) return [];
 
-      // 2) reservas ocupadas del día
-      const { data: res, error: e2 } = await supabase
+      // 2) Reservas ocupadas del día
+      const { data: reservations, error: e2 } = await supabase
         .from("reservations")
         .select("start_time,end_time")
         .eq("court_id", courtId)
-        .eq("reservation_date", date)
-        .in("payment_status", ["pending", "confirmed", "paid"]); // consideramos canceladas como libres
+        .eq("reservation_date", dateStr)
+        .in("payment_status", ["pending", "confirmed", "paid"]);
 
       if (e2) throw e2;
 
-      const busy: FreeSlot[] = (res ?? []).map((r) => ({
-        start: r.start_time,
-        end: r.end_time,
+      const busy = (reservations ?? []).map((r) => ({
+        start: normTime(r.start_time),
+        end: normTime(r.end_time),
       }));
 
-      // 3) slots base menos ocupados
-      const base = buildBaseSlots(ranges, stepMin);
+      // 3) Slots libres = base – ocupados
+      const base = buildBaseSlots(openRanges, stepMin);
       return base.filter((s) => !busy.some((b) => overlaps(s, b)));
-    } catch (err) {
-      console.error("Error fetching available slots:", err);
-      return [];
     }
-  };
+
 
   /**
    * Verifica si TODO el rango [startTime, endTime) está libre.
