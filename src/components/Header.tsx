@@ -40,7 +40,7 @@ const Header = ({ selectedSport, onSportChange, searchTerm, onSearchChange }: He
 
   const handleSignOut = async () => {
     await signOut();
-    navigate("/");
+    navigate(0);
   };
 
   return (
