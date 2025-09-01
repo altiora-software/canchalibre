@@ -156,6 +156,9 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const sendWhatsAppNotification = async (reservation: any, paymentMethod: string) => {
     try {
       const court = complex.courts?.find(c => c.id === selectedCourt);
+
+      console.log('complex',complex);
+
       const message = `🏟️ *NUEVA RESERVA*\n\n` +
         `📍 Complejo: ${complex.name}\n` +
         `🏐 Cancha: ${court?.name} (${court?.sport})\n` +
@@ -169,7 +172,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
       const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
         body: {
-          phoneNumber: complex.whatsapp || complex.phone || '5491133334444',
+          phoneNumber: complex.whatsapp || complex.phone || '5493884486112',
           message,
           complexName: complex.name,
           reservationId: reservation.id
