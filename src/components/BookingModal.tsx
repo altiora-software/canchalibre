@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,11 +13,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-/** Helpers locales para manejar fecha/hora en formato consistente */
+const DEBUG = true;
+
+/** Helpers */
 const pad = (n: number) => n.toString().padStart(2, "0");
 const formatLocalDateYYYYMMDD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-type FreeSlot = { start: string; end: string }; // coincide con lo que devuelve fetchAvailableSlots
+type FreeSlot = { start: string; end: string };
 
 interface BookingModalProps {
   complex: SportComplexData;
@@ -40,19 +42,32 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const [loading, setLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
-  /** Cargar slots libres cuando cambian cancha/fecha */
+  // Cargar slots cuando cambian cancha/fecha
   useEffect(() => {
     (async () => {
       if (!selectedCourt || !selectedDate) return;
       const dateStr = formatLocalDateYYYYMMDD(selectedDate);
+
+      if (DEBUG) {
+        console.groupCollapsed("[modal] cargar slots");
+        console.log("selectedCourt:", selectedCourt, "selectedDate:", dateStr);
+      }
+
       const slots = await fetchAvailableSlots(selectedCourt, dateStr);
+
+      if (DEBUG) {
+        console.log("slots recibidos:", slots.length);
+        if (slots.length <= 40) console.table(slots);
+        console.groupEnd();
+      }
+
       setAvailableSlots(slots);
       setStartTime("");
       setEndTime("");
     })();
   }, [selectedCourt, selectedDate, fetchAvailableSlots]);
 
-  /** Recalcular precio cuando cambia selección */
+  // Recalcular precio
   useEffect(() => {
     if (!selectedCourt || !startTime || !endTime) return;
     const court = complex.courts?.find((c) => c.id === selectedCourt);
@@ -61,13 +76,19 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
     const endHour = parseInt(endTime.split(":")[0], 10);
     const hours = Math.max(0, endHour - startHour);
     const hourlyPrice = court.hourly_price || 2000;
-    setTotalPrice(hours * hourlyPrice);
+    const price = hours * hourlyPrice;
+    setTotalPrice(price);
+
+    if (DEBUG) {
+      console.log("[modal] calcular precio →", { startTime, endTime, hours, hourlyPrice, total: price });
+    }
   }, [complex.courts, selectedCourt, startTime, endTime]);
 
-  /** Opciones para hora de inicio = todos los inicios de slots libres */
-  const startOptions = Array.from(new Set(availableSlots.map((s) => s.start))).sort();
+  const startOptions = useMemo(
+    () => Array.from(new Set(availableSlots.map((s) => s.start))).sort(),
+    [availableSlots]
+  );
 
-  /** Dadas las startTime seleccionada, listar posibles horas de fin contiguas (bloques de 1h) */
   const endOptionsFrom = (start?: string) => {
     if (!start) return [];
     const starts = new Set(availableSlots.map((s) => s.start));
@@ -77,15 +98,15 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
     while (true) {
       const [h, m] = cur.split(":").map(Number);
-      const nextEnd = `${pad(h + 1)}:${pad(m)}`;
-      if (!ends.has(nextEnd)) break; // no existe un slot que termine a esta hora
+      const nextEnd = `${pad((h || 0) + 1)}:${pad(m || 0)}`;
+      if (!ends.has(nextEnd)) break;
       out.push(nextEnd);
-
-      // Para extender 2h, 3h, etc., el siguiente bloque debe comenzar donde terminó el anterior
       const nextStart = nextEnd;
       if (!starts.has(nextStart)) break;
       cur = nextStart;
     }
+
+    if (DEBUG) console.log("[modal] endOptionsFrom(", start, ") →", out);
     return out;
   };
 
@@ -105,8 +126,23 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
     try {
       const dateStr = formatLocalDateYYYYMMDD(selectedDate);
 
-      // Validar disponibilidad real antes de insertar
+      if (DEBUG) {
+        console.groupCollapsed("[modal] submit");
+        console.log("payload draft:", {
+          user_id: user.id,
+          complex_id: complex.id,
+          court_id: selectedCourt,
+          dateStr,
+          startTime,
+          endTime,
+          paymentMethod,
+          notes,
+        });
+      }
+
       const isAvailable = await checkSlotAvailability(selectedCourt, dateStr, startTime, endTime);
+      if (DEBUG) console.log("checkSlotAvailability →", isAvailable);
+
       if (!isAvailable) {
         toast({
           title: "Error",
@@ -114,6 +150,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           variant: "destructive",
         });
         setLoading(false);
+        if (DEBUG) console.groupEnd();
         return;
       }
 
@@ -134,14 +171,18 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
         notes: notes || undefined,
       };
 
+      if (DEBUG) console.log("createReservation payload:", reservationData);
+
       const { data, error } = await createReservation(reservationData as any);
       if (error) {
         toast({ title: "Error", description: error, variant: "destructive" });
         setLoading(false);
+        if (DEBUG) console.groupEnd();
         return;
       }
 
-      // Flujo de notificación/pago según método
+      if (DEBUG) console.log("createReservation OK →", data);
+
       if (paymentMethod === "mercado_pago") {
         await handleMercadoPagoPayment(data.id);
       } else if (paymentMethod === "transfer") {
@@ -149,7 +190,10 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
       } else {
         await handleCashPayment(data);
       }
+
+      if (DEBUG) console.groupEnd();
     } catch (error: any) {
+      if (DEBUG) console.error("[modal] submit error:", error);
       toast({
         title: "Error",
         description: error.message || "Ocurrió un error al crear la reserva",
@@ -170,16 +214,20 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
         `📅 Fecha: ${selectedDate?.toLocaleDateString("es-ES")}\n` +
         `🕐 Horario: ${startTime} - ${endTime}\n` +
         `💰 Total: $${totalPrice}\n` +
-        `💳 Método de pago: ${
-          payMethod === "transfer" ? "Transferencia" : payMethod === "cash" ? "Efectivo" : "MercadoPago"
-        }\n` +
+        `💳 Método de pago: ${payMethod === "transfer" ? "Transferencia" : payMethod === "cash" ? "Efectivo" : "MercadoPago"}\n` +
         `${payMethod === "cash" ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ""}` +
         `${notes ? `📝 Notas: ${notes}\n` : ""}` +
         `\n📞 Contactar al cliente para confirmar`;
 
+      if (DEBUG) {
+        console.groupCollapsed("[modal] sendWhatsAppNotification");
+        console.log("to:", complex.whatsapp || complex.phone);
+        console.log("message:", message);
+      }
+
       const { data, error } = await supabase.functions.invoke("send-whatsapp-notification", {
         body: {
-          phoneNumber: complex.whatsapp || complex.phone || "5493884486112",
+          phoneNumber: complex.whatsapp || complex.phone || "5490000000000",
           message,
           complexName: complex.name,
           reservationId: reservation.id,
@@ -187,9 +235,13 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
       });
 
       if (error) throw error;
+      if (DEBUG) {
+        console.log("whatsapp response:", data);
+        console.groupEnd();
+      }
       return data;
     } catch (error: any) {
-      console.error("Error sending WhatsApp notification:", error);
+      if (DEBUG) console.error("[modal] whatsapp error:", error);
       throw error;
     }
   };
@@ -266,7 +318,13 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           {/* Court Selection */}
           <div className="space-y-2">
             <Label>Seleccionar cancha</Label>
-            <Select value={selectedCourt} onValueChange={setSelectedCourt}>
+            <Select
+              value={selectedCourt}
+              onValueChange={(v) => {
+                if (DEBUG) console.log("[modal] change court →", v);
+                setSelectedCourt(v);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Elige una cancha" />
               </SelectTrigger>
@@ -286,7 +344,10 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={setSelectedDate}
+              onSelect={(d) => {
+                if (DEBUG) console.log("[modal] change date →", d ? formatLocalDateYYYYMMDD(d) : null);
+                setSelectedDate(d);
+              }}
               disabled={(date) =>
                 date < new Date(new Date().setHours(0, 0, 0, 0)) ||
                 date > new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
@@ -299,7 +360,14 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Hora de inicio</Label>
-              <Select value={startTime} onValueChange={(v) => { setStartTime(v); setEndTime(""); }}>
+              <Select
+                value={startTime}
+                onValueChange={(v) => {
+                  if (DEBUG) console.log("[modal] change startTime →", v);
+                  setStartTime(v);
+                  setEndTime("");
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={selectedCourt && selectedDate ? "Seleccionar" : "Elegí cancha y fecha"} />
                 </SelectTrigger>
@@ -321,11 +389,23 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
                   ))}
                 </SelectContent>
               </Select>
+              {DEBUG && (
+                <div className="text-xs text-muted-foreground">
+                  startOptions: {startOptions.join(", ") || "(vacío)"}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
               <Label>Hora de fin</Label>
-              <Select value={endTime} onValueChange={setEndTime} disabled={!startTime}>
+              <Select
+                value={endTime}
+                onValueChange={(v) => {
+                  if (DEBUG) console.log("[modal] change endTime →", v);
+                  setEndTime(v);
+                }}
+                disabled={!startTime}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder={startTime ? "Seleccionar" : "Elegí hora de inicio"} />
                 </SelectTrigger>
