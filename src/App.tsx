@@ -21,6 +21,7 @@ import NotFound from "./pages/NotFound";
 import OwnersReset from "@/pages/OwnersReset";
 import ComplexDashboard from "./pages/ComplexDashboard";
 import Dashboard from "./pages/Dashboard";
+import RegisterCourtPage from "./pages/RegisterCourtPage";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/owners/auth" element={<OwnersAuth />} />
               <Route path="/owners/reset" element={<OwnersReset />} />
               <Route path="/register-complex" element={<RegisterComplex />} />
+              <Route path="/register-court" element={<RegisterCourtPage />} />
               <Route path="/complex/:id" element={<ComplexDetails />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/my-reservations" element={<MyReservations />} />
