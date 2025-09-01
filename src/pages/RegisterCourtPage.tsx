@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/hooks/useAuth"
-import { toast } from "react-toastify"
+import { toast } from "sonner";
 
 type DayKey = 0|1|2|3|4|5|6
 const DAYS: { key: DayKey; label: string }[] = [
