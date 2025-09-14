@@ -90,7 +90,7 @@ const Index = () => {
         <title>Cancha Libre - Encuentra las Mejores Canchas Deportivas en San Salvador de Jujuy</title>
         <meta name="description" content="Descubre y reserva canchas deportivas en San Salvador de Jujuy. Fútbol, básquet, tenis, vóley, handball y skate parks. Encuentra horarios, precios y contacta por WhatsApp." />
         <meta name="keywords" content="canchas deportivas Jujuy, fútbol 5 San Salvador, básquet Jujuy, tenis Jujuy, reservar cancha deportiva, complejos deportivos Argentina" />
-        <link rel="canonical" href="https://canchalibre.com" />
+        <link rel="canonical" href="https://canchasjujuy.com" />
         
         {/* Open Graph */}
         <meta property="og:title" content="Cancha Libre - Las Mejores Canchas Deportivas" />
@@ -116,7 +116,7 @@ const Index = () => {
               "latitude": -24.1858,
               "longitude": -65.3004
             },
-            "url": "https://canchalibre.com",
+            "url": "https://canchasjujuy.com",
             "telephone": "+54-388-XXX-XXXX",
             "openingHours": "Mo-Su 00:00-23:59",
             "priceRange": "$$$"
@@ -180,7 +180,7 @@ const Index = () => {
                   <Button 
                     size="lg" 
                     variant="outline" 
-                    className="border-white/30 text-white hover:bg-white/10 backdrop-blur-sm text-lg px-8 py-6"
+                    className="border-white/30 text-primary hover:bg-white/10 backdrop-blur-sm text-lg px-8 py-6"
                     onClick={() => {
                       document.getElementById('contact-section')?.scrollIntoView({ behavior: 'smooth' });
                     }}
@@ -355,9 +355,9 @@ const Index = () => {
                           size="lg" 
                           variant="outline" 
                           className="text-lg px-8 py-6"
-                          onClick={() => window.location.href = 'mailto:complejos@canchalibre.com?subject=Quiero agregar mi complejo'}
+                          onClick={() => window.location.href = 'mailto:canchalibrejujuy@gmail.com?subject=Quiero agregar mi complejo'}
                         >
-                          ✉️ complejos@canchalibre.com
+                          ✉️ canchalibrejujuy@gmail.com
                         </Button>
                       </div>
                     </div>

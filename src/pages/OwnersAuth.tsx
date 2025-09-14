@@ -1,191 +1,301 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import { MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
-const TAG = "[OwnersAuth]";
+/* =====================
+   Modal: solo datos del propietario
+   ===================== */
+type OwnerSetupModalProps = {
+  open: boolean;
+  onClose: () => void;
+  defaultEmail: string;
+  defaultName?: string;
+  onConfirm: (payload: { ownerName: string; ownerPhone: string }) => Promise<void>;
+  loading?: boolean;
+};
 
-/**
- * Redirige al dashboard del propietario:
- * 1) Si hay owner:lastComplexId en localStorage, verifica que sea de este owner y navega ahí.
- * 2) Sino busca el primer complejo del owner y navega ahí.
- * 3) Si no tiene complejos, navega a /register-complex.
- */
-async function goToOwnersComplex(navigate: (path: string, opts?: any) => void, uid: string) {
-  try {
-    // 1) Último complejo usado (validar propiedad)
-    const last = localStorage.getItem("owner:lastComplexId");
-    if (last) {
-      const { data: owned, error: ownedErr } = await supabase
-        .from("sport_complexes")
-        .select("id, owner_id")
-        .eq("id", last)
-        .eq("owner_id", uid)
-        .maybeSingle();
+const OwnerSetupModal = ({
+  open,
+  onClose,
+  defaultEmail,
+  defaultName,
+  onConfirm,
+  loading,
+}: OwnerSetupModalProps) => {
+  const [ownerName, setOwnerName] = useState(defaultName || "");
+  const [ownerPhone, setOwnerPhone] = useState("");
 
-      if (!ownedErr && owned?.id) {
-        console.log(TAG, "navigate → /owners/complex/" + owned.id, "(validated lastComplexId)");
-        navigate(`/owners/complex/${owned.id}`, { replace: true });
-        return;
-      } else {
-        console.log(TAG, "lastComplexId no es válido para este owner, lo ignoro");
-        localStorage.removeItem("owner:lastComplexId");
-      }
+  useEffect(() => {
+    setOwnerName(defaultName || "");
+  }, [defaultName]);
+
+  const disabled = !ownerName.trim() || !ownerPhone.trim();
+
+  return (
+    <Dialog open={open} onOpenChange={() => !loading && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Configurar tu cuenta de Propietario</DialogTitle>
+          <DialogDescription>
+            Completá tus datos para activar el perfil de propietario. Podrás cargar tu complejo después desde el
+            Dashboard.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          <div className="grid gap-3">
+            <Label className="text-sm text-muted-foreground">Tu email</Label>
+            <Input value={defaultEmail} disabled />
+          </div>
+
+          <div className="grid gap-3">
+            <Label>Nombre y Apellido (Propietario)</Label>
+            <Input
+              placeholder="Ej: Juan Pérez"
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <Label>Teléfono del propietario</Label>
+            <Input
+              placeholder="Ej: 3884123456"
+              value={ownerPhone}
+              onChange={(e) => setOwnerPhone(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => onConfirm({ ownerName, ownerPhone })}
+            disabled={disabled || !!loading}
+          >
+            {loading ? "Guardando…" : "Guardar y continuar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/* =====================
+   Página OwnersAuth
+   ===================== */
+const OwnersAuth = () => {
+  const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
+  const [error, setError] = useState("");
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupLoading, setSetupLoading] = useState(false);
+
+  // datos del usuario logueado (para modal)
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [pendingName, setPendingName] = useState("");
+
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  /**
+   * Asegura perfil con rol 'owner'. Si faltan datos clave (full_name o phone),
+   * abre el modal para completarlos. NO crea complejos acá.
+   */
+  const ensureOwnerAndMaybeSetup = async (sessionUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: any;
+  }) => {
+    // 1) Buscar perfil
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("user_id, role, full_name, phone, email")
+      .eq("user_id", sessionUser.id)
+      .maybeSingle();
+
+    const metaName =
+      existing?.full_name ||
+      sessionUser.user_metadata?.full_name ||
+      sessionUser.user_metadata?.name ||
+      "";
+
+    // 2) Upsert / Update para forzar rol owner y guardar nombre al menos
+    if (!existing) {
+      const { error: insErr } = await supabase.from("profiles").upsert(
+        {
+          user_id: sessionUser.id,
+          email: sessionUser.email ?? null,
+          full_name: metaName,
+          role: "owner",
+        },
+        { onConflict: "user_id" }
+      );
+      if (insErr) throw insErr;
+    } else if (existing.role !== "owner" || !existing.full_name) {
+      const { error: updErr } = await supabase
+        .from("profiles")
+        .update({ role: "owner", full_name: metaName })
+        .eq("user_id", sessionUser.id);
+      if (updErr) throw updErr;
     }
 
-    // 2) Buscar el primer complejo del owner
-    const { data: complexes, error } = await supabase
-      .from("sport_complexes")
-      .select("id")
-      .eq("owner_id", uid)
-      .order("created_at", { ascending: true })
-      .limit(1);
-
-    if (!error && complexes?.[0]?.id) {
-      const cid = complexes[0].id;
-      console.log(TAG, "navigate → /owners/complex/" + cid, "(first complex of owner)");
-      localStorage.setItem("owner:lastComplexId", cid);
-      navigate(`/owners/complex/${cid}`, { replace: true });
+    // 3) Si faltan full_name o phone → abrir modal para completarlos
+    if (!existing?.phone || !existing?.full_name) {
+      setPendingEmail(sessionUser.email || existing?.email || "");
+      setPendingName(metaName || "");
+      setShowSetup(true);
       return;
     }
 
-    // 3) No tiene complejos aún
-    console.log(TAG, "navigate → /register-complex (owner without complexes)");
-    navigate("/register-complex", { replace: true });
-  } catch (e) {
-    console.error(TAG, "goToOwnersComplex error", e);
-    // fallback seguro
-    navigate("/register-complex", { replace: true });
-  }
-}
-
-const OwnersAuth = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [sendingReset, setSendingReset] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
-
-  const fetchProfileRole = async (uid: string) => {
-    console.log(TAG, "fetchProfileRole() for user_id:", uid);
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("user_id, role")
-      .eq("user_id", uid)
-      .maybeSingle();
-
-    console.log(TAG, "profiles query →", { data, error });
-    return { data, error };
+    // 4) Todo OK → al dashboard
+    navigate("/dashboard");
   };
 
-  // Auto-redirect si ya hay sesión
+  // on mount y en sign-in
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-
-    (async () => {
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      console.log(TAG, "initial getSession →", !!session);
-      const uid = session?.user?.id;
-      if (uid) {
-        const { data, error } = await fetchProfileRole(uid);
-        if (!error && data?.role === "owner") {
-          await goToOwnersComplex(navigate, uid);
+      if (session?.user) {
+        try {
+          await ensureOwnerAndMaybeSetup(session.user);
+        } catch (e: any) {
+          console.error("ensureOwner:", e?.message || e);
+          toast({
+            title: "No se pudo asignar el rol de propietario",
+            description: "Intenta nuevamente.",
+            variant: "destructive",
+          });
         }
       }
+    };
+    init();
 
-      // Escuchar cambios de auth (por si otra pestaña loguea)
-      const { data: sub } = supabase.auth.onAuthStateChange(async (event, sess) => {
-        console.log(TAG, "onAuthStateChange →", event, !!sess);
-        const userId = sess?.user?.id;
-        if (!userId) return;
-
-        const { data, error } = await fetchProfileRole(userId);
-        if (!error && data?.role === "owner") {
-          await goToOwnersComplex(navigate, userId);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          try {
+            await ensureOwnerAndMaybeSetup(session.user);
+          } catch (e: any) {
+            console.error("ensureOwner:", e?.message || e);
+            toast({
+              title: "No se pudo asignar el rol de propietario",
+              description: "Intenta nuevamente.",
+              variant: "destructive",
+            });
+          }
         }
-      });
+      }
+    );
 
-      unsub = () => sub?.subscription?.unsubscribe();
-    })();
-
-    return () => { try { unsub?.(); } catch {} };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Submit login (propietario)
-  const onLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSocialLogin = async (provider: "google" | "facebook") => {
+    setSocialLoading(provider);
     setError("");
 
     try {
-      console.log(TAG, "signInWithPassword()");
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      console.log(TAG, "signInWithPassword →", { user: data?.user?.id, error });
-
-      if (error) throw error;
-      if (!data?.user?.id) throw new Error("No se obtuvo el usuario luego del login.");
-
-      const uid = data.user.id;
-      const { data: p, error: pErr } = await fetchProfileRole(uid);
-      if (pErr) throw pErr;
-
-      if (p?.role === "owner") {
-        await goToOwnersComplex(navigate, uid);
-      } else {
-        await supabase.auth.signOut();
-        setError("Esta cuenta no tiene permisos de propietario.");
-      }
-    } catch (err: any) {
-      console.error(TAG, "login error:", err);
-      setError(err?.message ?? "No se pudo iniciar sesión.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Reset pass
-  const sendReset = async () => {
-    setSendingReset(true);
-    setError("");
-
-    try {
-      const base =
-        typeof window !== "undefined" && window.location?.origin
+      const baseUrl =
+        window.location.hostname === "localhost"
           ? window.location.origin
           : "https://canchalibre.vercel.app";
 
-      console.log(TAG, "resetPasswordForEmail → redirectTo:", `${base}/owners/reset`);
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${base}/owners/reset`,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${baseUrl}/owners/auth`,
+          queryParams: { access_type: "offline", prompt: "consent" },
+        },
       });
+
       if (error) throw error;
-      alert("Te enviamos un email con el enlace para restablecer tu contraseña.");
+      // El onAuthStateChange hará el resto
     } catch (err: any) {
-      console.error(TAG, "reset error:", err);
-      setError(err?.message ?? "No se pudo enviar el email de recuperación.");
-    } finally {
-      setSendingReset(false);
+      setError(err.message);
+      setSocialLoading(null);
     }
   };
 
-  // UI
+  /* =====================
+     Guardar modal: SOLO perfil/owner (no crea complejo)
+     ===================== */
+  const handleConfirmSetup = async (payload: {
+    ownerName: string;
+    ownerPhone: string;
+  }) => {
+    setSetupLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) throw new Error("Sesión no disponible");
+      const uid = session.user.id;
+
+      // normalizar teléfono
+      const normOwnerPhone = (payload.ownerPhone || "").replace(/\D/g, "");
+
+      // upsert perfil con rol owner y datos básicos
+      const { error: upsertErr } = await supabase
+        .from("profiles")
+        .upsert(
+          {
+            user_id: uid,
+            email: session.user.email ?? null,
+            full_name: payload.ownerName,
+            phone: normOwnerPhone || null,
+            role: "owner",
+          },
+          { onConflict: "user_id" }
+        );
+      if (upsertErr) throw upsertErr;
+
+      toast({
+        title: "¡Listo!",
+        description: "Tu cuenta de propietario quedó configurada.",
+      });
+      setShowSetup(false);
+      navigate("/dashboard");
+    } catch (e: any) {
+      console.error("setup confirm:", e?.message || e);
+      toast({
+        title: "No se pudo guardar la configuración",
+        description: e?.message || "Intenta nuevamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   return (
     <>
       <Helmet>
-        <title>Propietarios - Iniciar sesión</title>
-        <meta name="robots" content="noindex, nofollow" />
+        <title>Portal Propietarios - Cancha Libre</title>
+        <meta
+          name="description"
+          content="Acceso exclusivo para propietarios de complejos deportivos. Gestiona tu negocio con Cancha Libre."
+        />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-br from-secondary/5 via-background to-primary/5 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
+          {/* Header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center space-x-2 mb-4">
               <div className="w-12 h-12 bg-gradient-sport rounded-lg flex items-center justify-center shadow-lg">
@@ -194,13 +304,16 @@ const OwnersAuth = () => {
               <span className="text-3xl font-bold text-foreground">Cancha Libre</span>
             </div>
             <h1 className="text-2xl font-bold text-foreground mb-2">Portal de Propietarios</h1>
-            <p className="text-muted-foreground">Acceso exclusivo para dueños de complejos</p>
+            <p className="text-muted-foreground text-lg">Gestiona tu complejo deportivo</p>
+            <p className="text-sm text-muted-foreground mt-2">Acceso exclusivo para dueños de complejos</p>
           </div>
 
           <Card className="shadow-card-custom border-0">
             <CardHeader className="pb-6 text-center">
-              <CardTitle className="text-2xl text-foreground">Iniciar sesión</CardTitle>
-              <CardDescription>Ingresá con el usuario que te creamos</CardDescription>
+              <CardTitle className="text-2xl text-foreground">¡Bienvenido Propietario!</CardTitle>
+              <CardDescription className="text-base">
+                Ingresa con tu cuenta para acceder al panel de gestión
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {error && (
@@ -209,56 +322,64 @@ const OwnersAuth = () => {
                 </Alert>
               )}
 
-              <form onSubmit={onLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="h-11"
-                  />
-                </div>
-
-                <Button type="submit" className="w-full h-11" disabled={loading}>
-                  {loading ? "Ingresando…" : "Ingresar"}
+              <div className="space-y-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full flex items-center gap-3 h-12 text-base font-medium hover:bg-muted/50 transition-colors"
+                  onClick={() => handleSocialLogin("google")}
+                  disabled={socialLoading === "google"}
+                >
+                  <svg className="w-6 h-6" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    />
+                  </svg>
+                  {socialLoading === "google" ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      Conectando...
+                    </div>
+                  ) : (
+                    "Continuar con Google"
+                  )}
                 </Button>
-              </form>
+              </div>
 
-              <div className="flex items-center justify-between mt-4">
-                <button
-                  type="button"
-                  className="text-sm text-primary hover:underline"
-                  onClick={sendReset}
-                  disabled={!email || sendingReset}
-                >
-                  {sendingReset ? "Enviando…" : "¿Olvidaste tu contraseña?"}
-                </button>
-                <button
-                  type="button"
-                  className="text-sm text-muted-foreground hover:underline"
-                  onClick={() => navigate("/auth")}
-                >
-                  Soy cliente
-                </button>
+              <div className="mt-8 p-4 bg-secondary/20 rounded-lg">
+                <h3 className="font-semibold text-foreground mb-2">🏢 Portal Exclusivo</h3>
+                <p className="text-sm text-muted-foreground">
+                  Este es el acceso especial para propietarios. Primero completás tus datos; el complejo lo podrás crear
+                  luego en el Dashboard.
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Modal inicial solo para datos del propietario */}
+      <OwnerSetupModal
+        open={showSetup}
+        onClose={() => setShowSetup(false)}
+        defaultEmail={pendingEmail}
+        defaultName={pendingName}
+        onConfirm={handleConfirmSetup}
+        loading={setupLoading}
+      />
     </>
   );
 };

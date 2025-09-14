@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,270 +13,253 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-const DEBUG = true;
-
-/** Helpers */
-const pad = (n: number) => n.toString().padStart(2, "0");
-const formatLocalDateYYYYMMDD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-type FreeSlot = { start: string; end: string };
-
 interface BookingModalProps {
   complex: SportComplexData;
   isOpen: boolean;
   onClose: () => void;
 }
 
+type Block = { start: string; end: string }; // "HH:MM"
+
 const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { createReservation, fetchAvailableSlots, checkSlotAvailability } = useReservations();
-
+  
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedCourt, setSelectedCourt] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<"mercado_pago" | "transfer" | "cash">("mercado_pago");
+  const [paymentMethod, setPaymentMethod] = useState<'mercado_pago' | 'transfer' | 'cash'>('mercado_pago');
   const [notes, setNotes] = useState<string>("");
-  const [availableSlots, setAvailableSlots] = useState<FreeSlot[]>([]);
+  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
-  // Cargar slots cuando cambian cancha/fecha
-  useEffect(() => {
-    (async () => {
-      if (!selectedCourt || !selectedDate) return;
-      const dateStr = formatLocalDateYYYYMMDD(selectedDate);
-
-      if (DEBUG) {
-        console.groupCollapsed("[modal] cargar slots");
-        console.log("selectedCourt:", selectedCourt, "selectedDate:", dateStr);
-      }
-
-      const slots = await fetchAvailableSlots(selectedCourt, dateStr);
-
-      if (DEBUG) {
-        console.log("slots recibidos:", slots.length);
-        if (slots.length <= 40) console.table(slots);
-        console.groupEnd();
-      }
-
-      setAvailableSlots(slots);
-      setStartTime("");
-      setEndTime("");
-    })();
-  }, [selectedCourt, selectedDate, fetchAvailableSlots]);
-
-  // Recalcular precio
-  useEffect(() => {
-    if (!selectedCourt || !startTime || !endTime) return;
-    const court = complex.courts?.find((c) => c.id === selectedCourt);
-    if (!court) return;
-    const startHour = parseInt(startTime.split(":")[0], 10);
-    const endHour = parseInt(endTime.split(":")[0], 10);
-    const hours = Math.max(0, endHour - startHour);
-    const hourlyPrice = court.hourly_price || 2000;
-    const price = hours * hourlyPrice;
-    setTotalPrice(price);
-
-    if (DEBUG) {
-      console.log("[modal] calcular precio →", { startTime, endTime, hours, hourlyPrice, total: price });
-    }
-  }, [complex.courts, selectedCourt, startTime, endTime]);
-
-  const startOptions = useMemo(
-    () => Array.from(new Set(availableSlots.map((s) => s.start))).sort(),
-    [availableSlots]
+  
+  const ymd = useMemo(
+    () => (selectedDate ? new Date(selectedDate).toISOString().slice(0, 10) : null),
+    [selectedDate ? selectedDate.toDateString() : null]
   );
+  const lastFetchKey = useRef<string | null>(null);
+  // 🔒 bloques ocupados en el día/cancha
+  const [busyBlocks, setBusyBlocks] = useState<Block[]>([]);
 
-  const endOptionsFrom = (start?: string) => {
-    if (!start) return [];
-    const starts = new Set(availableSlots.map((s) => s.start));
-    const ends = new Set(availableSlots.map((s) => s.end));
-    const out: string[] = [];
-    let cur = start;
+ // helpers de solapamiento (dejá esto donde prefieras)
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+};
+const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+  Math.max(toMinutes(aStart), toMinutes(bStart)) < Math.min(toMinutes(aEnd), toMinutes(bEnd));
 
-    while (true) {
-      const [h, m] = cur.split(":").map(Number);
-      const nextEnd = `${pad((h || 0) + 1)}:${pad(m || 0)}`;
-      if (!ends.has(nextEnd)) break;
-      out.push(nextEnd);
-      const nextStart = nextEnd;
-      if (!starts.has(nextStart)) break;
-      cur = nextStart;
-    }
-
-    if (DEBUG) console.log("[modal] endOptionsFrom(", start, ") →", out);
-    return out;
+  const isRangeFree = (from: string, to: string) =>
+    !busyBlocks.some(b => overlaps(from, to, b.start, b.end));
+  const isStartSlotFree = (time: string) => {
+    // bloque de 1h [time, time+1h) libre
+    const end = `${(parseInt(time.substring(0,2)) + 1).toString().padStart(2,"0")}:00`;
+    return isRangeFree(time, end);
   };
 
+  // ---- slots 09–22 ----
+  const generateTimeSlots = () => {
+    const slots: string[] = [];
+    for (let hour = 9; hour <= 22; hour++) {
+      slots.push(`${hour.toString().padStart(2, '0')}:00`);
+    }
+    return slots;
+  };
+  const timeSlots = generateTimeSlots();
+
+  
+  
+
+  // 👉 traer reservas existentes (solo console.debug en errores)
+  useEffect(() => {
+    if (!isOpen || !selectedCourt || !ymd) return;
+  
+    const key = `${selectedCourt}-${ymd}`;
+    if (lastFetchKey.current === key) return; // ya buscado
+    lastFetchKey.current = key;
+  
+    (async () => {
+      try {
+        setBusyBlocks([]);
+        setStartTime("");
+        setEndTime("");
+  
+        // OJO: no pedimos 'status' porque tu tabla no lo tiene.
+        const { data, error } = await supabase
+          .from("reservations")
+          .select("start_time,end_time")
+          .eq("court_id", selectedCourt)
+          .eq("reservation_date", ymd);
+  
+        if (error || !Array.isArray(data)) {
+          console.debug("reservations fetch warn:", error || "empty");
+          return; // no toast si vino 200 raro
+        }
+  
+        const blocks = data
+          .map((r: any) => ({
+            start: (r.start_time as string).slice(0, 5),
+            end: (r.end_time as string).slice(0, 5),
+          }))
+          .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  
+        setBusyBlocks(blocks);
+      } catch (e) {
+        console.debug("reservations fetch error:", e);
+      }
+    })();
+  }, [isOpen, selectedCourt, ymd]);
+  
+
+  // recalcular precio
+  useEffect(() => {
+    if (selectedCourt && startTime && endTime) {
+      const court = complex.courts?.find(c => c.id === selectedCourt);
+      if (!court) return;
+      const start = parseInt(startTime.split(':')[0], 10);
+      const end = parseInt(endTime.split(':')[0], 10);
+      const hours = Math.max(0, end - start);
+      const hourlyPrice = court.hourly_price || 2000;
+      setTotalPrice(hours * hourlyPrice);
+    } else {
+      setTotalPrice(0);
+    }
+  }, [selectedCourt, startTime, endTime, complex.courts]);
+  
+  // opciones válidas para hora de fin (sin pisar reservas)
+  const endTimeOptions = timeSlots.filter(time => {
+    if (!startTime) return false;
+    const startHour = parseInt(startTime.split(":")[0], 10);
+    const timeHour  = parseInt(time.split(":")[0], 10);
+    if (timeHour <= startHour) return false;
+    return isRangeFree(startTime, time);
+  });
+
+
+  // -------------------- submit --------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !selectedDate || !selectedCourt || !startTime || !endTime) {
-      toast({
-        title: "Error",
-        description: "Por favor completa todos los campos requeridos",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Por favor completa todos los campos requeridos", variant: "destructive" });
+      return;
+    }
+
+    // chequeo local por las dudas
+    if (!isRangeFree(startTime, endTime)) {
+      toast({ title: "Horario ocupado", description: "El rango elegido se superpone con otra reserva.", variant: "destructive" });
       return;
     }
 
     setLoading(true);
 
     try {
-      const dateStr = formatLocalDateYYYYMMDD(selectedDate);
-
-      if (DEBUG) {
-        console.groupCollapsed("[modal] submit");
-        console.log("payload draft:", {
-          user_id: user.id,
-          complex_id: complex.id,
-          court_id: selectedCourt,
-          dateStr,
-          startTime,
-          endTime,
-          paymentMethod,
-          notes,
-        });
-      }
-
-      const isAvailable = await checkSlotAvailability(selectedCourt, dateStr, startTime, endTime);
-      if (DEBUG) console.log("checkSlotAvailability →", isAvailable);
-
+      // chequeo en servidor por condiciones de carrera
+      const isAvailable = await checkSlotAvailability(
+        selectedCourt,
+        selectedDate.toISOString().split('T')[0],
+        startTime,
+        endTime
+      );
       if (!isAvailable) {
-        toast({
-          title: "Error",
-          description: "El horario seleccionado ya no está disponible",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: "El horario seleccionado ya no está disponible", variant: "destructive" });
         setLoading(false);
-        if (DEBUG) console.groupEnd();
         return;
       }
 
-      const depositAmount = paymentMethod === "cash" ? totalPrice * 0.3 : 0;
+      const depositAmount = paymentMethod === 'cash' ? totalPrice * 0.3 : 0;
 
       const reservationData = {
         user_id: user.id,
         complex_id: complex.id,
         court_id: selectedCourt,
-        reservation_date: dateStr,
+        reservation_date: selectedDate.toISOString().split('T')[0],
         start_time: startTime,
         end_time: endTime,
         total_price: totalPrice,
         payment_method: paymentMethod,
-        payment_status: "pending" as const,
+        payment_status: 'pending' as any,
         deposit_amount: depositAmount,
         deposit_paid: false,
-        notes: notes || undefined,
+        notes: notes || undefined
       };
 
-      if (DEBUG) console.log("createReservation payload:", reservationData);
-
-      const { data, error } = await createReservation(reservationData as any);
+      const { data, error } = await createReservation(reservationData);
       if (error) {
         toast({ title: "Error", description: error, variant: "destructive" });
         setLoading(false);
-        if (DEBUG) console.groupEnd();
         return;
       }
 
-      if (DEBUG) console.log("createReservation OK →", data);
-
-      if (paymentMethod === "mercado_pago") {
+      // pagos / notificaciones (igual que tenías)
+      if (paymentMethod === 'mercado_pago') {
         await handleMercadoPagoPayment(data.id);
-      } else if (paymentMethod === "transfer") {
+      } else if (paymentMethod === 'transfer') {
         await handleBankTransfer(data);
       } else {
         await handleCashPayment(data);
       }
 
-      if (DEBUG) console.groupEnd();
     } catch (error: any) {
-      if (DEBUG) console.error("[modal] submit error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Ocurrió un error al crear la reserva",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  const sendWhatsAppNotification = async (reservation: any, payMethod: string) => {
+  // ------------ notificaciones (sin cambios funcionales) ------------
+  const sendWhatsAppNotification = async (reservation: any, method: string) => {
     try {
-      const court = complex.courts?.find((c) => c.id === selectedCourt);
+      const court = complex.courts?.find(c => c.id === selectedCourt);
       const message =
         `🏟️ *NUEVA RESERVA*\n\n` +
         `📍 Complejo: ${complex.name}\n` +
         `🏐 Cancha: ${court?.name} (${court?.sport})\n` +
-        `📅 Fecha: ${selectedDate?.toLocaleDateString("es-ES")}\n` +
+        `📅 Fecha: ${selectedDate?.toLocaleDateString('es-ES')}\n` +
         `🕐 Horario: ${startTime} - ${endTime}\n` +
         `💰 Total: $${totalPrice}\n` +
-        `💳 Método de pago: ${payMethod === "transfer" ? "Transferencia" : payMethod === "cash" ? "Efectivo" : "MercadoPago"}\n` +
-        `${payMethod === "cash" ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ""}` +
-        `${notes ? `📝 Notas: ${notes}\n` : ""}` +
+        `💳 Método de pago: ${method === 'transfer' ? 'Transferencia' : method === 'cash' ? 'Efectivo' : 'MercadoPago'}\n` +
+        `${method === 'cash' ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ''}` +
+        `${notes ? `📝 Notas: ${notes}\n` : ''}` +
         `\n📞 Contactar al cliente para confirmar`;
 
-      if (DEBUG) {
-        console.groupCollapsed("[modal] sendWhatsAppNotification");
-        console.log("to:", complex.whatsapp || complex.phone);
-        console.log("message:", message);
-      }
-
-      const { data, error } = await supabase.functions.invoke("send-whatsapp-notification", {
+      const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
         body: {
-          phoneNumber: complex.whatsapp || complex.phone || "5490000000000",
+          phoneNumber: complex.whatsapp || complex.phone || '5491133334444',
           message,
           complexName: complex.name,
-          reservationId: reservation.id,
-        },
+          reservationId: reservation.id
+        }
       });
-
       if (error) throw error;
-      if (DEBUG) {
-        console.log("whatsapp response:", data);
-        console.groupEnd();
-      }
       return data;
-    } catch (error: any) {
-      if (DEBUG) console.error("[modal] whatsapp error:", error);
-      throw error;
+    } catch (e) {
+      console.debug('sendWhatsAppNotification warn:', e);
+      throw e;
     }
   };
 
   const handleMercadoPagoPayment = async (reservationId: string) => {
     try {
-      await sendWhatsAppNotification({ id: reservationId }, "mercado_pago");
-      toast({
-        title: "Reserva creada",
-        description: "Se envió la notificación por WhatsApp. Te contactaremos para coordinar el pago por MercadoPago.",
-      });
+      await sendWhatsAppNotification({ id: reservationId }, 'mercado_pago');
+      toast({ title: "Reserva creada", description: "Se envió la notificación por WhatsApp. Te contactaremos para coordinar el pago por MercadoPago." });
       onClose();
     } catch {
-      toast({
-        title: "Error",
-        description: "Reserva creada pero no se pudo enviar la notificación",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Reserva creada pero no se pudo enviar la notificación", variant: "destructive" });
       onClose();
     }
   };
 
   const handleBankTransfer = async (reservation: any) => {
     try {
-      await sendWhatsAppNotification(reservation, "transfer");
-      toast({
-        title: "Reserva creada",
-        description: "Se envió la notificación por WhatsApp. Te contactaremos con los datos para la transferencia.",
-      });
+      await sendWhatsAppNotification(reservation, 'transfer');
+      toast({ title: "Reserva creada", description: "Se envió la notificación por WhatsApp. Te contactaremos con los datos para la transferencia." });
       onClose();
     } catch {
-      toast({
-        title: "Reserva creada",
-        description: "Te contactaremos con los datos para la transferencia bancaria",
-      });
+      toast({ title: "Reserva creada", description: "Te contactaremos con los datos para la transferencia bancaria" });
       onClose();
     }
   };
@@ -284,22 +267,12 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const handleCashPayment = async (reservation: any) => {
     try {
       const depositAmount = totalPrice * 0.3;
-      await sendWhatsAppNotification(reservation, "cash");
-      toast({
-        title: "Reserva creada",
-        description: `Se envió la notificación por WhatsApp. Debes pagar una seña de $${Math.round(
-          depositAmount
-        )} para confirmar tu reserva.`,
-      });
+      await sendWhatsAppNotification(reservation, 'cash');
+      toast({ title: "Reserva creada", description: `Se envió la notificación. Debes pagar una seña de $${Math.round(depositAmount)}.` });
       onClose();
     } catch {
       const depositAmount = totalPrice * 0.3;
-      toast({
-        title: "Reserva creada",
-        description: `Debes pagar una seña de $${Math.round(
-          depositAmount
-        )} para confirmar tu reserva. Te contactaremos para coordinar el pago.`,
-      });
+      toast({ title: "Reserva creada", description: `Debes pagar una seña de $${Math.round(depositAmount)}. Te contactaremos para coordinar el pago.` });
       onClose();
     }
   };
@@ -320,10 +293,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
             <Label>Seleccionar cancha</Label>
             <Select
               value={selectedCourt}
-              onValueChange={(v) => {
-                if (DEBUG) console.log("[modal] change court →", v);
-                setSelectedCourt(v);
-              }}
+              onValueChange={(v) => { setSelectedCourt(v); setStartTime(""); setEndTime(""); }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Elige una cancha" />
@@ -344,12 +314,9 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={(d) => {
-                if (DEBUG) console.log("[modal] change date →", d ? formatLocalDateYYYYMMDD(d) : null);
-                setSelectedDate(d);
-              }}
+              onSelect={(d) => { setSelectedDate(d); setStartTime(""); setEndTime(""); }}
               disabled={(date) =>
-                date < new Date(new Date().setHours(0, 0, 0, 0)) ||
+                date < new Date(new Date().setHours(0,0,0,0)) ||
                 date > new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
               }
               className="rounded-md border w-fit"
@@ -360,72 +327,32 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Hora de inicio</Label>
-              <Select
-                value={startTime}
-                onValueChange={(v) => {
-                  if (DEBUG) console.log("[modal] change startTime →", v);
-                  setStartTime(v);
-                  setEndTime("");
-                }}
-              >
+              <Select value={startTime} onValueChange={(v) => { setStartTime(v); setEndTime(""); }}>
                 <SelectTrigger>
-                  <SelectValue placeholder={selectedCourt && selectedDate ? "Seleccionar" : "Elegí cancha y fecha"} />
+                  <SelectValue placeholder="Seleccionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(!selectedCourt || !selectedDate) && (
-                    <SelectItem value="__none__" disabled>
-                      Elegí cancha y fecha
-                    </SelectItem>
-                  )}
-                  {selectedCourt && selectedDate && startOptions.length === 0 && (
-                    <SelectItem value="__no__" disabled>
-                      No hay horarios disponibles
-                    </SelectItem>
-                  )}
-                  {startOptions.map((time) => (
-                    <SelectItem key={time} value={time}>
-                      {time}
+                  {timeSlots.slice(0, -1).map((time) => (
+                    <SelectItem key={time} value={time} disabled={!isStartSlotFree(time)}>
+                      {time}{!isStartSlotFree(time) ? " (ocupado)" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {DEBUG && (
-                <div className="text-xs text-muted-foreground">
-                  startOptions: {startOptions.join(", ") || "(vacío)"}
-                </div>
-              )}
             </div>
 
             <div className="space-y-2">
               <Label>Hora de fin</Label>
-              <Select
-                value={endTime}
-                onValueChange={(v) => {
-                  if (DEBUG) console.log("[modal] change endTime →", v);
-                  setEndTime(v);
-                }}
-                disabled={!startTime}
-              >
+              <Select value={endTime} onValueChange={setEndTime}>
                 <SelectTrigger>
-                  <SelectValue placeholder={startTime ? "Seleccionar" : "Elegí hora de inicio"} />
+                  <SelectValue placeholder="Seleccionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {!startTime && (
-                    <SelectItem value="__startfirst__" disabled>
-                      Elegí hora de inicio
+                  {endTimeOptions.map((time) => (
+                    <SelectItem key={time} value={time}>
+                      {time}
                     </SelectItem>
-                  )}
-                  {startTime && endOptionsFrom(startTime).length === 0 && (
-                    <SelectItem value="__noend__" disabled>
-                      No hay extensión disponible
-                    </SelectItem>
-                  )}
-                  {startTime &&
-                    endOptionsFrom(startTime).map((time) => (
-                      <SelectItem key={time} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))}
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -437,9 +364,9 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
             <div className="grid grid-cols-1 gap-3">
               <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === "mercado_pago" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  paymentMethod === 'mercado_pago' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                 }`}
-                onClick={() => setPaymentMethod("mercado_pago")}
+                onClick={() => setPaymentMethod('mercado_pago')}
               >
                 <div className="flex items-center gap-3">
                   <CreditCard className="w-5 h-5 text-blue-600" />
@@ -452,9 +379,9 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
               <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === "transfer" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  paymentMethod === 'transfer' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                 }`}
-                onClick={() => setPaymentMethod("transfer")}
+                onClick={() => setPaymentMethod('transfer')}
               >
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-5 h-5 text-green-600" />
@@ -467,16 +394,16 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
               <div
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === "cash" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                 }`}
-                onClick={() => setPaymentMethod("cash")}
+                onClick={() => setPaymentMethod('cash')}
               >
                 <div className="flex items-center gap-3">
                   <DollarSign className="w-5 h-5 text-orange-600" />
                   <div>
                     <p className="font-medium">Efectivo</p>
                     <p className="text-sm text-muted-foreground">
-                      Seña del 30% requerida ({totalPrice > 0 ? `$${Math.round(totalPrice * 0.3)}` : "$0"})
+                      Seña del 30% requerida ({totalPrice > 0 ? `$${Math.round(totalPrice * 0.3)}` : '$0'})
                     </p>
                   </div>
                 </div>
@@ -487,7 +414,12 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
           {/* Notes */}
           <div className="space-y-2">
             <Label>Notas adicionales (opcional)</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Cualquier información adicional..." rows={3} />
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Cualquier información adicional..."
+              rows={3}
+            />
           </div>
 
           {/* Price Summary */}
@@ -499,8 +431,10 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
                   ${totalPrice}
                 </Badge>
               </div>
-              {paymentMethod === "cash" && (
-                <p className="text-sm text-muted-foreground mt-2">Seña requerida: ${Math.round(totalPrice * 0.3)} (30%)</p>
+              {paymentMethod === 'cash' && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Seña requerida: ${Math.round(totalPrice * 0.3)} (30%)
+                </p>
               )}
             </div>
           )}

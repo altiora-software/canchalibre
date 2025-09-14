@@ -1,8 +1,13 @@
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { LogIn, UserPlus, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,108 +23,88 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    let unsub: { subscription: { unsubscribe: () => void } } | null = null;
-  
-    const handleSession = async (uid: string) => {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role, full_name")
-        .eq("user_id", uid)            // tu esquema usa user_id
-        .single();
-  
-      if (error) {
-        // si el trigger aún no creó el profile, espera un toque y reintenta 1 vez
-        await new Promise(r => setTimeout(r, 300));
-        const { data: p2 } = await supabase
-          .from("profiles")
-          .select("role, full_name")
-          .eq("user_id", uid)
-          .single();
-        if (p2?.role === "customer") {
-          navigate("/", { replace: true });
-          return;
-        }
-        await supabase.auth.signOut();
-        setError("Este acceso social es solo para clientes.");
-        return;
-      }
-  
-      if (profile?.role === "customer") {
-        navigate("/", { replace: true });
-      } else {
-        await supabase.auth.signOut();
-        setError("Este acceso social es solo para clientes.");
-      }
-    };
-  
-    const init = async () => {
+    // Check if user is already logged in and handle social login completion
+    const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        await handleSession(session.user.id);
-      }
-      // escucha futuros cambios (por si llega después el SIGNED_IN del OAuth)
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          await handleSession(session.user.id);
-        }
-        if (event === "SIGNED_OUT") {
-          // limpia estados UI si hace falta
-          // setShowRoleModal(false);
-          // setPendingSocialUser(null);
-        }
-      });
-      unsub = data;
-    };
-  
-    init();
-  
-    return () => {
-      unsub?.subscription.unsubscribe();
-    };
-  }, [navigate]);
-  
+        // Check if this is a new social user without role
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('user_id', session.user.id)
+          .maybeSingle(); 
 
-  const handleSocialLogin = async (provider: "google" | "facebook") => {
+        if (!profile?.role || profile.role === 'customer') {
+          // Show role selection modal for new social users or users without proper role
+          const userName = profile?.full_name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
+          setPendingSocialUser({
+            email: session.user.email || '',
+            name: userName
+          });
+          setShowRoleModal(true);
+        } else {
+          navigate("/");
+        }
+      }
+    };
+
+    checkUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Check if this is a social login and needs role selection
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (!profile?.role) {
+          const userName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
+          setPendingSocialUser({
+            email: session.user.email || '',
+            name: userName
+          });
+          setShowRoleModal(true);
+        } else {
+          navigate("/");
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  const handleSocialLogin = async (provider: 'google' | 'facebook') => {
     setSocialLoading(provider);
     setError("");
-  
+
     try {
-      // URL base dinámica (local, preview de Vercel o prod)
-      const baseUrl =
-        typeof window !== "undefined" && window.location?.origin
-          ? window.location.origin
-          : "https://canchalibre.vercel.app";
-  
-      // Scopes por proveedor (seguí usando los tuyos; agrego los típicos)
-      const scopes =
-        provider === "google"
-          ? "openid email profile"
-          : "public_profile email"; // facebook
-  
+      // Use the actual production URL
+      const baseUrl = window.location.hostname === 'localhost' 
+        ? window.location.origin 
+        : 'https://canchalibre.vercel.app';
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${baseUrl}/auth/callback`, // Asegurate de tener esta ruta y declararla en Supabase > Auth > URL Configuration > Redirect URLs
-          scopes,
-          queryParams:
-            provider === "google"
-              ? {
-                  access_type: "offline",
-                  prompt: "consent",
-                }
-              : undefined,
-        },
+          redirectTo: `${baseUrl}/auth`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
       });
-  
+
       if (error) throw error;
-  
-      // Importante: no reseteo loading aquí porque habrá redirección.
-    } catch (err: any) {
-      setError(err?.message || "Error iniciando sesión");
+      
+      // Don't reset loading here - let the auth state change handle it
+    } catch (error: any) {
+      setError(error.message);
       setSocialLoading(null);
     }
   };
-  
 
 
   return (
@@ -214,7 +199,7 @@ const Auth = () => {
             </CardContent>
           </Card>
 
-          <div className="text-center mt-6 text-sm text-muted-foreground">
+          {/* <div className="text-center mt-6 text-sm text-muted-foreground">
             ¿Tienes un complejo deportivo? {" "}
             <button 
               onClick={() => navigate("/owners/auth")}
@@ -222,7 +207,7 @@ const Auth = () => {
             >
               Acceso para propietarios
             </button>
-          </div>
+          </div> */}
         </div>
 
         {/* Role Selection Modal for Social Users */}

@@ -23,6 +23,7 @@ const sports = [
   { id: "voley", name: "Vóley", icon: "🏐" },
   { id: "handball", name: "Handball", icon: "🤾" },
   { id: "skate", name: "Skate", icon: "🛹" },
+  { id: "padle", name: "Padle", icon: "🎾" },
 ];
 
 interface HeaderProps {
@@ -40,7 +41,7 @@ const Header = ({ selectedSport, onSportChange, searchTerm, onSearchChange }: He
 
   const handleSignOut = async () => {
     await signOut();
-    navigate(0);
+    navigate("/");
   };
 
   return (
@@ -103,12 +104,18 @@ const Header = ({ selectedSport, onSportChange, searchTerm, onSearchChange }: He
                       {user.email}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
+                    {user && (<DropdownMenuItem asChild>
                       <Link to="/my-reservations">
                         <User className="mr-2 h-4 w-4" />
                         Mis Reservas
                       </Link>
-                    </DropdownMenuItem>
+                    </DropdownMenuItem>)}
+                    {user && (<DropdownMenuItem asChild>
+                      <Link to="/profile">
+                        <User className="mr-2 h-4 w-4" />
+                        Mi Perfil
+                      </Link>
+                    </DropdownMenuItem>)}
                     {isOwner && (
                       <DropdownMenuItem asChild>
                         <Link to="/dashboard">
