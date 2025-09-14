@@ -17,7 +17,6 @@ type ProfileState = {
   setDraft: (draft: ProfileDraft) => void;
   patchDraft: (p: Partial<ProfileDraft>) => void;
   resetDraft: () => void;
-
   loading: boolean;
   setLoading: (v: boolean) => void;
 };
