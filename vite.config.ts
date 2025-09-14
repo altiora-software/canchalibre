@@ -8,6 +8,6 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
   build: { modulePreload: { polyfill: false } },
   css: {
-    postcss: path.resolve(__dirname, "postcss.config.cjs"), // 👈 clave
+    postcss: path.resolve(__dirname, "postcss.config.cjs"),
   },
 });
