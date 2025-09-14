@@ -84,7 +84,7 @@ const OwnerSetupModal = ({
         </div>
 
         <DialogFooter className="mt-4">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button variant="outline" onClick={onClose} disabled={!!loading}>
             Cancelar
           </Button>
           <Button
@@ -116,56 +116,53 @@ const OwnersAuth = () => {
   const { toast } = useToast();
 
   /**
-   * Asegura perfil con rol 'owner'. Si faltan datos clave (full_name o phone),
-   * abre el modal para completarlos. NO crea complejos acá.
+   * Verifica el perfil actual:
+   * - Si role !== 'owner' o faltan full_name / phone -> abrir modal
+   * - Si ya es owner y tiene todo -> ir a /dashboard
+   * NO cambia el rol desde el cliente.
    */
   const ensureOwnerAndMaybeSetup = async (sessionUser: {
     id: string;
     email?: string | null;
     user_metadata?: any;
   }) => {
-    // 1) Buscar perfil
-    const { data: existing } = await supabase
+    const { data: profile, error: pErr } = await supabase
       .from("profiles")
       .select("user_id, role, full_name, phone, email")
       .eq("user_id", sessionUser.id)
       .maybeSingle();
 
-    const metaName =
-      existing?.full_name ||
-      sessionUser.user_metadata?.full_name ||
-      sessionUser.user_metadata?.name ||
-      "";
-
-    // 2) Upsert / Update para forzar rol owner y guardar nombre al menos
-    if (!existing) {
-      const { error: insErr } = await supabase.from("profiles").upsert(
-        {
-          user_id: sessionUser.id,
-          email: sessionUser.email ?? null,
-          full_name: metaName,
-          role: "owner",
-        },
-        { onConflict: "user_id" }
-      );
-      if (insErr) throw insErr;
-    } else if (existing.role !== "owner" || !existing.full_name) {
-      const { error: updErr } = await supabase
-        .from("profiles")
-        .update({ role: "owner", full_name: metaName })
-        .eq("user_id", sessionUser.id);
-      if (updErr) throw updErr;
-    }
-
-    // 3) Si faltan full_name o phone → abrir modal para completarlos
-    if (!existing?.phone || !existing?.full_name) {
-      setPendingEmail(sessionUser.email || existing?.email || "");
-      setPendingName(metaName || "");
+    if (pErr) {
+      // si algo falla, mostramos modal para completar datos y que la función haga el resto
+      setPendingEmail(sessionUser.email || "");
+      const name =
+        sessionUser.user_metadata?.full_name ||
+        sessionUser.user_metadata?.name ||
+        "";
+      setPendingName(name);
       setShowSetup(true);
       return;
     }
 
-    // 4) Todo OK → al dashboard
+    const fullName =
+      profile?.full_name ||
+      sessionUser.user_metadata?.full_name ||
+      sessionUser.user_metadata?.name ||
+      "";
+
+    const needsModal =
+      !profile ||
+      profile.role !== "owner" ||
+      !fullName ||
+      !profile.phone;
+
+    if (needsModal) {
+      setPendingEmail(profile?.email || sessionUser.email || "");
+      setPendingName(fullName || "");
+      setShowSetup(true);
+      return;
+    }
+
     navigate("/dashboard");
   };
 
@@ -179,7 +176,7 @@ const OwnersAuth = () => {
         } catch (e: any) {
           console.error("ensureOwner:", e?.message || e);
           toast({
-            title: "No se pudo asignar el rol de propietario",
+            title: "No se pudo validar el perfil de propietario",
             description: "Intenta nuevamente.",
             variant: "destructive",
           });
@@ -196,7 +193,7 @@ const OwnersAuth = () => {
           } catch (e: any) {
             console.error("ensureOwner:", e?.message || e);
             toast({
-              title: "No se pudo asignar el rol de propietario",
+              title: "No se pudo validar el perfil de propietario",
               description: "Intenta nuevamente.",
               variant: "destructive",
             });
@@ -235,35 +232,34 @@ const OwnersAuth = () => {
   };
 
   /* =====================
-     Guardar modal: SOLO perfil/owner (no crea complejo)
+     Guardar modal: llama a la Edge Function para promover a owner
      ===================== */
-  const handleConfirmSetup = async (payload: {
-    ownerName: string;
-    ownerPhone: string;
-  }) => {
+  const handleConfirmSetup = async (payload: { ownerName: string; ownerPhone: string }) => {
     setSetupLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) throw new Error("Sesión no disponible");
-      const uid = session.user.id;
 
-      // normalizar teléfono
-      const normOwnerPhone = (payload.ownerPhone || "").replace(/\D/g, "");
+      const token = session.access_token;
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/owner-onboarding`;
 
-      // upsert perfil con rol owner y datos básicos
-      const { error: upsertErr } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            user_id: uid,
-            email: session.user.email ?? null,
-            full_name: payload.ownerName,
-            phone: normOwnerPhone || null,
-            role: "owner",
-          },
-          { onConflict: "user_id" }
-        );
-      if (upsertErr) throw upsertErr;
+      const res = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ownerName: payload.ownerName,
+          ownerPhone: payload.ownerPhone,
+          // no enviamos 'complex' aquí; se creará más tarde desde el dashboard
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.error || "No se pudo promover a propietario");
+      }
 
       toast({
         title: "¡Listo!",
@@ -272,7 +268,7 @@ const OwnersAuth = () => {
       setShowSetup(false);
       navigate("/dashboard");
     } catch (e: any) {
-      console.error("setup confirm:", e?.message || e);
+      console.error("owner-onboarding:", e?.message || e);
       toast({
         title: "No se pudo guardar la configuración",
         description: e?.message || "Intenta nuevamente.",

@@ -67,7 +67,7 @@ export const useUserProfile = () => {
       const path = `${user.id}/${Date.now()}.${ext}`;
   
       const { error: upErr } = await supabase.storage
-        .from("avatars") 
+        .from("avatars")
         .upload(path, file, { upsert: true });
   
       if (upErr) throw upErr;
@@ -78,5 +78,6 @@ export const useUserProfile = () => {
     [user]
   );
 
+  
   return { getMyProfile, updateMyProfile, uploadAvatar };
 };
