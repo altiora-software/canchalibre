@@ -131,7 +131,7 @@ const MyReservations = () => {
       </Helmet>
 
       {/* NAVBAR (mobile-first) */}
-      <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b bg-green/95 backdrop-blur">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 font-semibold">
             <Home className="w-5 h-5" />

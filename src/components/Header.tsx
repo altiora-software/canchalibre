@@ -45,7 +45,7 @@ const Header = ({ selectedSport, onSportChange, searchTerm, onSearchChange }: He
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-border shadow-card-custom">
+    <header className="sticky top-0 z-50 w-full bg-green/95 backdrop-blur-sm border-b border-border shadow-card-custom">
       <div className="container mx-auto px-4">
         {/* Main Header */}
         <div className="flex items-center justify-between h-16">
