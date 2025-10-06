@@ -114,9 +114,18 @@ const OwnerDashboard = () => {
     if (tab === "reservations" && reservations.length === 0 && !resLoading) loadReservations();
   }, [tab]);
 
-  if (!user) { navigate("/auth"); return null; }
-  if (profileLoading || complexesLoading) return <div className="min-h-screen flex items-center justify-center">Cargando…</div>;
-  if (!isOwner) { navigate("/"); return null; }
+  useEffect(() => {
+    if (user && isOwner) fetchOwnerComplexes(user.id);
+  }, [user, isOwner]);
+  
+  useEffect(() => {
+    if (!profileLoading && !user) {
+      navigate("/auth");
+    } else if (!profileLoading && !isOwner) {
+      navigate("/");
+    }
+  }, [user, isOwner, profileLoading, navigate]);
+
 
   return (
     <>

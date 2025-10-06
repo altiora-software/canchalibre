@@ -1,30 +1,36 @@
 // supabase/functions/owner-onboarding/index.ts
-// deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 Deno.serve(async (req) => {
+  const headers = {
+    "Access-Control-Allow-Origin": ["http://localhost:8080", "https://canchalibre.vercel.app"], // tu frontend
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json",
+  };
+
+  // Preflight CORS
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers });
+  }
+
   try {
     // Autenticación del usuario que llama
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace("Bearer ", "");
-    if (!jwt) return new Response("Unauthorized", { status: 401 });
+    if (!jwt) return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { headers, status: 401 });
 
     const body = await req.json();
-    const {
-      ownerName,
-      ownerPhone,
-      complex, // opcional: { name, whatsapp, address, neighborhood?, notes?, latitude?, longitude? }
-    } = body;
+    const { ownerName, ownerPhone, complex } = body;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! // Service Role
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Obtener el user_id desde el JWT
     const { data: userInfo, error: userErr } = await supabase.auth.getUser(jwt);
     if (userErr || !userInfo?.user) {
-      return new Response("Invalid token", { status: 401 });
+      return new Response(JSON.stringify({ ok: false, error: "Invalid token" }), { headers, status: 401 });
     }
     const uid = userInfo.user.id;
 
@@ -36,9 +42,8 @@ Deno.serve(async (req) => {
     });
     if (promoteErr) throw promoteErr;
 
-    // 2) Si llegó info de complejo, crear el primero (si no tiene)
+    // 2) Crear complejo si se envió info y no tiene ninguno
     if (complex) {
-      // ¿ya tiene alguno?
       const { data: exists, error: exErr } = await supabase
         .from("sport_complexes")
         .select("id")
@@ -63,20 +68,16 @@ Deno.serve(async (req) => {
           longitude: complex.longitude ?? null,
         };
 
-        const { error: insErr } = await supabase
-          .from("sport_complexes")
-          .insert(row);
+        const { error: insErr } = await supabase.from("sport_complexes").insert(row);
         if (insErr) throw insErr;
       }
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(JSON.stringify({ ok: true }), { headers });
   } catch (e: any) {
-    return new Response(JSON.stringify({ ok: false, error: e.message ?? String(e) }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ ok: false, error: e.message ?? String(e) }),
+      { headers, status: 400 }
+    );
   }
 });

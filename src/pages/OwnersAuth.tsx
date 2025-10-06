@@ -115,12 +115,44 @@ const OwnersAuth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const ensureProfileRoleOnce = async (role: "user" | "owner") => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const sUser = session?.user;
+    if (!sUser) return;
+  
+    const uid = sUser.id;
+    const email = sUser.email ?? null;
+    const metaName = sUser.user_metadata?.full_name || sUser.user_metadata?.name || "";
+  
+    // Verifico si existe perfil
+    const { data: prof, error: profErr } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("user_id", uid)
+      .maybeSingle();
+  
+    if (profErr) console.debug("profiles fetch warn:", profErr.message);
+  
+    // Solo si NO existe, lo creo con el rol correspondiente
+    if (!prof) {
+      const { error: insErr } = await supabase.from("profiles").insert({
+        user_id: uid,
+        email,
+        full_name: metaName || null,
+        role,
+      });
+      if (insErr) console.debug("profiles insert warn:", insErr.message);
+    }
+  };
+  
   /**
    * Verifica el perfil actual:
    * - Si role !== 'owner' o faltan full_name / phone -> abrir modal
    * - Si ya es owner y tiene todo -> ir a /dashboard
    * NO cambia el rol desde el cliente.
    */
+  
+  
   const ensureOwnerAndMaybeSetup = async (sessionUser: {
     id: string;
     email?: string | null;
@@ -172,6 +204,7 @@ const OwnersAuth = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         try {
+          await ensureProfileRoleOnce("owner");
           await ensureOwnerAndMaybeSetup(session.user);
         } catch (e: any) {
           console.error("ensureOwner:", e?.message || e);
@@ -184,7 +217,7 @@ const OwnersAuth = () => {
       }
     };
     init();
-
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
@@ -234,50 +267,44 @@ const OwnersAuth = () => {
   /* =====================
      Guardar modal: llama a la Edge Function para promover a owner
      ===================== */
-  const handleConfirmSetup = async (payload: { ownerName: string; ownerPhone: string }) => {
-    setSetupLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) throw new Error("Sesión no disponible");
-
-      const token = session.access_token;
-      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/owner-onboarding`;
-
-      const res = await fetch(fnUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ownerName: payload.ownerName,
-          ownerPhone: payload.ownerPhone,
-          // no enviamos 'complex' aquí; se creará más tarde desde el dashboard
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json?.ok) {
-        throw new Error(json?.error || "No se pudo promover a propietario");
+     const handleConfirmSetup = async (payload: { ownerName: string; ownerPhone: string }) => {
+      setSetupLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) throw new Error("Sesión no disponible");
+    
+        const uid = session.user.id;
+    
+        // Actualizamos el perfil directamente
+        const { error: updateErr } = await supabase
+          .from("profiles")
+          .update({
+            full_name: payload.ownerName,
+            phone: payload.ownerPhone.replace(/\D/g, ""),
+            role: "owner", // promovemos directamente
+          })
+          .eq("user_id", uid);
+    
+        if (updateErr) throw updateErr;
+    
+        toast({
+          title: "¡Listo!",
+          description: "Tu cuenta de propietario quedó configurada.",
+        });
+        setShowSetup(false);
+        navigate("/dashboard");
+      } catch (e: any) {
+        console.error("owner-update:", e?.message || e);
+        toast({
+          title: "No se pudo guardar la configuración",
+          description: e?.message || "Intenta nuevamente.",
+          variant: "destructive",
+        });
+      } finally {
+        setSetupLoading(false);
       }
-
-      toast({
-        title: "¡Listo!",
-        description: "Tu cuenta de propietario quedó configurada.",
-      });
-      setShowSetup(false);
-      navigate("/dashboard");
-    } catch (e: any) {
-      console.error("owner-onboarding:", e?.message || e);
-      toast({
-        title: "No se pudo guardar la configuración",
-        description: e?.message || "Intenta nuevamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setSetupLoading(false);
-    }
-  };
+    };
+    
 
   return (
     <>

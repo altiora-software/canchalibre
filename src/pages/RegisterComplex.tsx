@@ -442,7 +442,7 @@ const RegisterComplex = () => {
                       <Label htmlFor="players-capacity">Cantidad de Jugadores</Label>
                       <Select
                         value={currentCourt.playersCapacity.toString()}
-                        onValueChange={(value) => setCurrentCourt({ ...currentCourt, playersCapacity: parseInt(value) })}
+                        onValueChange={(value) => setCurrentCourt({ ...currentCourt, playersCapacity: parseInt(value.replace(/\D/g, "")) })}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -452,9 +452,9 @@ const RegisterComplex = () => {
                           <SelectItem value="4">4 jugadores</SelectItem>
                           <SelectItem value="7">7 jugadores</SelectItem>
                           <SelectItem value="8">8 jugadores</SelectItem>
-                          <SelectItem value="10">10 jugadores (futbol)</SelectItem>
+                          <SelectItem value="10futbol">10 jugadores (futbol)</SelectItem>
                           <SelectItem value="11">11 jugadores</SelectItem>
-                          <SelectItem value="10">10 jugadores (básquet)</SelectItem>
+                          <SelectItem value="10basquet">10 jugadores (básquet)</SelectItem>
                           <SelectItem value="12">12 jugadores (vóley)</SelectItem>
                           <SelectItem value="14">14 jugadores (handball)</SelectItem>
                         </SelectContent>

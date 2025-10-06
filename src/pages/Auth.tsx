@@ -60,16 +60,48 @@ const Auth = () => {
     }
   };
 
+  const ensureProfileRoleOnce = async (role: "user" | "owner") => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const sUser = session?.user;
+    if (!sUser) return;
+  
+    const uid = sUser.id;
+    const email = sUser.email ?? null;
+    const metaName = sUser.user_metadata?.full_name || sUser.user_metadata?.name || "";
+  
+    // Verifico si existe perfil
+    const { data: prof, error: profErr } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("user_id", uid)
+      .maybeSingle();
+  
+    if (profErr) console.debug("profiles fetch warn:", profErr.message);
+  
+    // Solo si NO existe, lo creo con el rol correspondiente
+    if (!prof) {
+      const { error: insErr } = await supabase.from("profiles").insert({
+        user_id: uid,
+        email,
+        full_name: metaName || null,
+        role,
+      });
+      if (insErr) console.debug("profiles insert warn:", insErr.message);
+    }
+  };
+  
+
   // Al montar: si ya está logueado, aseguro el rol y redirijo
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        await ensureProfileRoleOnce("user");
         await ensureUserRole();
         navigate("/");
       }
     })();
-
+    
     // También cuando ocurre SIGNED_IN
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event) => {
@@ -135,7 +167,7 @@ const Auth = () => {
               Encuentra y reserva canchas deportivas
             </p>
             <p className="text-sm text-muted-foreground mt-2">
-              Acceso para clientes (rol <strong>user</strong>)
+              Acceso para clientes
             </p>
           </div>
 
