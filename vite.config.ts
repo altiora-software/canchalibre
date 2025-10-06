@@ -6,8 +6,30 @@ export default defineConfig({
   server: { host: "::", port: 8080 },
   plugins: [react()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
-  build: { modulePreload: { polyfill: false } },
-  css: {
-    postcss: path.resolve(__dirname, "postcss.config.cjs"),
+  // optimizeDeps: {
+  //   exclude: ['vite/modulepreload-polyfill']
+  // },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom')) {
+              return 'vendor-react'
+            }
+            if (id.includes('@radix-ui')) {
+              return 'vendor-radix'
+            }
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase'
+            }
+            return 'vendor'
+          }
+        }
+      },
+    },
   },
+  css: {
+    postcss: {}
+  }
 });
