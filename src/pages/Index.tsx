@@ -88,7 +88,7 @@ const Index = () => {
     <>
       <Helmet>
         <title>Cancha Libre - Encuentra las Mejores Canchas Deportivas en San Salvador de Jujuy</title>
-        <meta name="description" content="Descubre y reserva canchas deportivas en San Salvador de Jujuy. Fútbol, básquet, tenis, vóley, handball y skate parks. Encuentra horarios, precios y contacta por WhatsApp." />
+        <meta name="description" content="Descubre y reserva canchas deportivas en San Salvador de Jujuy. Fútbol, básquet, tenis, vóley, handball, padle y skateparks. Encuentra horarios, precios y contacta por WhatsApp." />
         <meta name="keywords" content="canchas deportivas Jujuy, fútbol 5 San Salvador, básquet Jujuy, tenis Jujuy, reservar cancha deportiva, complejos deportivos Argentina" />
         <link rel="canonical" href="https://canchasjujuy.com" />
         
@@ -415,7 +415,7 @@ const Index = () => {
           <div className="container mx-auto px-4 text-center">
             <div className="flex items-center justify-center space-x-2 mb-4">
               <div className="w-8 h-8 bg-gradient-sport rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">CJ</span>
+                <span className="text-white font-bold text-sm">CL</span>
               </div>
               <span className="text-xl font-bold">Cancha Libre</span>
             </div>

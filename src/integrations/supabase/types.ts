@@ -361,6 +361,7 @@ export type Database = {
         | "voley"
         | "handball"
         | "skate"
+        | "padle"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -488,7 +489,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      sport_type: ["futbol", "basquet", "tenis", "voley", "handball", "skate"],
+      sport_type: ["futbol", "basquet", "tenis", "voley", "handball", "skate", "padle"],
     },
   },
 } as const

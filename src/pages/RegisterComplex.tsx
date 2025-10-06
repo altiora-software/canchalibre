@@ -25,7 +25,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
 
-type SportType = "futbol" | "basquet" | "tenis" | "voley" | "handball" | "skate";
+type SportType = "futbol" | "basquet" | "tenis" | "voley" | "handball" | "skate" | "padle";
 
 interface Court {
   name: string;
@@ -74,6 +74,7 @@ const RegisterComplex = () => {
     { value: "voley", label: "Vóley" },
     { value: "handball", label: "Handball" },
     { value: "skate", label: "Skate" },
+    { value: "padle", label: "Padle" },
   ];
 
   const amenitiesOptions = [
@@ -447,10 +448,11 @@ const RegisterComplex = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="5">5 jugadores</SelectItem>
-                          <SelectItem value="6">6 jugadores</SelectItem>
+                          <SelectItem value="2">2 jugadores</SelectItem>
+                          <SelectItem value="4">4 jugadores</SelectItem>
                           <SelectItem value="7">7 jugadores</SelectItem>
                           <SelectItem value="8">8 jugadores</SelectItem>
+                          <SelectItem value="10">10 jugadores (futbol)</SelectItem>
                           <SelectItem value="11">11 jugadores</SelectItem>
                           <SelectItem value="10">10 jugadores (básquet)</SelectItem>
                           <SelectItem value="12">12 jugadores (vóley)</SelectItem>

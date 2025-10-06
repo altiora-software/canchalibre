@@ -33,7 +33,9 @@ export const neighborhoods = [
   "Cuyaya", 
   "Palpalá",
   "Villa Jardin",
-  "Barrio Norte"
+  "Barrio Norte",
+  "San Pedrito",
+  "Malvinas Argentinas"
 ];
 
 export const sportTypes = [
@@ -44,5 +46,5 @@ export const sportTypes = [
   { id: "voley", name: "Vóley", icon: "🏐" },
   { id: "handball", name: "Handball", icon: "🤾" },
   { id: "skate", name: "Skate", icon: "🛹" },
-  { id: "padel", name: "Pádel", icon: "🏓" },
+  { id: "padle", name: "Pádle", icon: "🏓" },
 ];

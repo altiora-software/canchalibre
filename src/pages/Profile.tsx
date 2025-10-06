@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 
 import { Camera, Save, User, Phone, MapPin, Mail } from "lucide-react";
 
-const sportsList = ["fútbol", "tenis", "básquet", "vóley", "pádel", "handball"];
+const sportsList = ["fútbol", "tenis", "básquet", "vóley", "pádel", "handball","skate","padle"];
 
 const Profile = () => {
   const { user } = useAuth();
