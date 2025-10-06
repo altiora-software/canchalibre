@@ -9,9 +9,9 @@
     "paths": {
       "@/*": ["./src/*"]
     },
+    "lib": ["ES2023", "dom", "dom.iterable", "esnext"],
     "jsx": "react-jsx",
     "target": "ES2022",
-    "lib": ["ES2023"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",

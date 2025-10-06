@@ -8,7 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 220 50% 100%;
+    --background: 160 50% 90% / 0.8; 
     --foreground: 220 26% 14%;
 
     --card: 0 0% 100%;
@@ -43,7 +43,7 @@ All colors MUST be HSL.
 
     /* Gradientes deportivos */
     --gradient-sport: linear-gradient(135deg, hsl(160 84% 39%), hsl(217 91% 60%));
-    --gradient-hero: linear-gradient(135deg, hsl(160 84% 39% / 0.9), hsl(217 91% 60% / 0.9));
+    --gradient-hero: linear-gradient(135deg, hsl(160 84% 39% / 0.5), hsl(217 91% 60% / 0.5));
     --gradient-card: linear-gradient(180deg, transparent, hsl(160 84% 39% / 0.05));
     
     /* Shadows deportivas */
@@ -72,7 +72,7 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 01.2 84% 4.9%;
+    --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
 
     --card: 222.2 84% 4.9%;
@@ -111,6 +111,10 @@ All colors MUST be HSL.
 }
 
 @layer base {
+  * {
+    @apply border-border;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
