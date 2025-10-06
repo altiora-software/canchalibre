@@ -204,9 +204,9 @@ const Profile = () => {
                     <img src={draft.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full grid place-items-center text-muted-foreground">
-                      <AvatarFallback className="bg-transparent text-muted-foreground">
+                      {/* <AvatarFallback className="bg-transparent text-muted-foreground">
                         <User className="w-7 h-7" />
-                      </AvatarFallback>
+                      </AvatarFallback> */}
                     </div>
                   )}
                 </div>
