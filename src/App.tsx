@@ -19,6 +19,7 @@ import TermsOfService from "./pages/TermsOfService";
 import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 import Profile from "./pages/Profile";
+import OwnerComplexDetails from "./pages/OwnerComplexDetails";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/owners/auth" element={<OwnersAuth />} />
               <Route path="/register-complex" element={<RegisterComplex />} />
               <Route path="/complex/:id" element={<ComplexDetails />} />
+              <Route path="/owner-complex/:id" element={<OwnerComplexDetails />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/my-reservations" element={<MyReservations />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />

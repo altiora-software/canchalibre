@@ -12,35 +12,75 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import CreateReservationModal, { OwnerReservation as ModalOwnerReservation } from "@/components/reservationsSection/CreateReservation";
+
 
 import {
-  BarChart3, Calendar, CheckCircle2, Clock, Eye, MapPin, Megaphone,
-  Plus, Settings, ShieldAlert, Sparkles, Users
+  BarChart3, Calendar, CheckCircle2, Clock, Eye, Layers, LogOut, MapPin, Megaphone,
+  Plus, Settings, ShieldAlert, Sparkles, User, Users
 } from "lucide-react";
+import ReservationsCalendar from "@/components/reservationsSection/ReservationsCalendar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
+import { Avatar, AvatarFallback } from "@radix-ui/react-avatar";
 
-type OwnerReservation = {
+interface OwnerReservation {
   id: string;
-  reservation_date: string;
-  start_time: string;
-  end_time: string;
-  total_price: number | null;
-  payment_status: string | null;
-  sport_courts?: { name: string; sport: string } | null;
-  sport_complexes?: { id: string; name: string } | null;
-};
+  user_id: string;
+  complex_id: string;
+  court_id: string;
+  reservation_date: string;           // YYYY-MM-DD
+  start_time: string;                 // HH:mm
+  end_time: string;                   // HH:mm
+  total_price?: number;
+  payment_status: "pending" | "approved" | "cancelled" | "paid";
+  sport_complexes?: { 
+    id: string; 
+    name: string; 
+    owner_id: string; 
+  };
+  sport_courts?: { 
+    name: string; 
+    sport: string; 
+  };
+  profiles?: { full_name: string }
+}
 
 const OwnerDashboard = () => {
-  const { user } = useAuth();
-  const { isOwner, loading: profileLoading } = useProfile();
+  const { user, signOut } = useAuth();
+  const { isOwner, loading: profileLoading, profile } = useProfile();
   const { complexes, loading: complexesLoading, fetchOwnerComplexes } = useComplexes();
   const navigate = useNavigate();
-
   const [tab, setTab] = useState<"dashboard" | "reservations" | "notifications" | "plus">("dashboard");
   const [resLoading, setResLoading] = useState(false);
   const [reservations, setReservations] = useState<OwnerReservation[]>([]);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  interface ReservationWithProfile {
+    id: string;
+    user_id: string;
+    complex_id: string;
+    court_id: string;
+    reservation_date: string;
+    start_time: string;
+    end_time: string;
+    total_price: number;
+    deposit_amount: number;
+    deposit_paid: boolean;
+    payment_method: string;
+    payment_status: string;
+    mercadopago_payment_id: string | null;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+    sport_complexes: { id: string; name: string; owner_id: string };
+    sport_courts: { name: string; sport: string };
+    full_name: string; // <- del creador de la reserva
+  }
 
   useEffect(() => {
     if (user && isOwner) fetchOwnerComplexes(user.id);
+    console.log('profile',profile)
   }, [user, isOwner]);
 
   const { anyActive, anyTrial, courtsCount } = useMemo(() => {
@@ -54,62 +94,67 @@ const OwnerDashboard = () => {
   }, [complexes]);
 
   const loadReservations = async () => {
-    if (!user) return;
+    if (!user) {
+      console.warn("No hay `user` en el contexto. Abortando loadReservations.");
+      return;
+    }
     setResLoading(true);
+  
     try {
-      // intento 1: join directo (si RLS lo permite)
-      let { data, error } = await supabase
-        .from("reservations")
-        .select(`
-          id,reservation_date,start_time,end_time,total_price,payment_status,
-          sport_courts ( name, sport ),
-          sport_complexes!inner ( id, name, owner_id )
-        `)
-        .eq("sport_complexes.owner_id", user.id)
-        .order("reservation_date", { ascending: false })
-        .order("start_time", { ascending: true });
+      // Obtener user autenticado del cliente (opcional, sólo para logs)
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) console.warn("supabase.auth.getUser() error:", authError);
+      const authUserId = authData?.user?.app_metadata.id ?? user.id;
+      const ownerId = profile.id;
+      console.log('ownerId', ownerId);
+      console.log('authData',authData);
+      console.log("Cargando reservas para owner (authUserId):", authUserId);
 
-      if (!error && Array.isArray(data)) {
-        setReservations(data as unknown as OwnerReservation[]);
-        return;
-      }
+      const { data, error } = await supabase
+        .rpc<any, any>("get_reservations_by_owner", {
+          owner_uuid: ownerId  
+        });
 
-      // intento 2: dos pasos por RLS
-      const complexIds = complexes.map(c => c.id);
-      if (complexIds.length === 0) {
+      if (error) {
+        console.error("Error al obtener reservas:", error);
         setReservations([]);
         return;
       }
-      const step2 = await supabase
-        .from("reservations")
-      .select(`
-        id,
-        reservation_date,
-        start_time,
-        end_time,
-        total_price,
-        payment_status,
-
-        sport_complexes:complex_id!inner(reservations_complex_id_fkey) (
-          id, name, owner_id
-        ),
-
-        sport_courts:court_id!reservations_court_id_fkey (
-          name, sport
-        )
-      `)
-      .eq("sport_complexes.owner_id", user.id)   // filtro sobre la tabla join
-      .order("reservation_date", { ascending: false })
-      .order("start_time", { ascending: true });
-
-      if (!step2.error && Array.isArray(step2.data)) {
-        setReservations(step2.data as unknown as OwnerReservation[]);
-      }
+  
+      console.log("Reservas devueltas por Supabase (post-RLS):", Array.isArray(data) ? data.length : 0);
+      console.log("data:", data);
+      setReservations((data ?? []) as unknown as OwnerReservation[]);
+    } catch (err) {
+      console.error("Error inesperado en loadReservations:", err);
+      setReservations([]);
     } finally {
       setResLoading(false);
     }
   };
 
+  const handleCreatedReservation = (res: ModalOwnerReservation) => {
+    // normalizar la estructura para el estado local
+    const normalized: OwnerReservation = {
+      id: res.reservation_id ?? (res as any).id,
+      user_id: res.user_id,
+      complex_id: res.complex_id,
+      court_id: res.court_id,
+      reservation_date: res.reservation_date,
+      start_time: res.start_time,
+      end_time: res.end_time,
+      total_price: res.total_price ?? 0,
+      payment_status: res.payment_status ?? "pending",
+      sport_complexes: res.sport_complexes ? { id: res.sport_complexes.id ?? "", name: res.sport_complexes.name ?? "", owner_id: res.sport_complexes.owner_id ?? "" } : undefined,
+      sport_courts: res.sport_courts ? { name: res.sport_courts.name ?? "", sport: res.sport_courts.sport ?? "" } : undefined,
+      profiles: res.profiles ? { full_name: res.profiles.full_name ?? "" } : undefined,
+      };
+
+    setReservations(prev => [normalized, ...(prev ?? [])]);
+
+    // si ya estás en la pestaña reservaciones, podrías refrescar o solo insertar — aquí insertamos
+    if (tab !== "reservations") setTab("reservations");
+  };
+  
   useEffect(() => {
     if (tab === "reservations" && reservations.length === 0 && !resLoading) loadReservations();
   }, [tab]);
@@ -117,7 +162,7 @@ const OwnerDashboard = () => {
   useEffect(() => {
     if (user && isOwner) fetchOwnerComplexes(user.id);
   }, [user, isOwner]);
-  
+
   useEffect(() => {
     if (!profileLoading && !user) {
       navigate("/auth");
@@ -126,6 +171,11 @@ const OwnerDashboard = () => {
     }
   }, [user, isOwner, profileLoading, navigate]);
 
+  const handleSignOut = async () => {
+    await signOut();
+    setIsMenuOpen(false);
+    navigate("/");
+  };
 
   return (
     <>
@@ -143,6 +193,9 @@ const OwnerDashboard = () => {
               <p className="text-muted-foreground">Gestiona tus complejos, reservas y comunicación</p>
             </div>
             <div className="flex gap-2">
+              <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
+                <Plus className="w-4 h-4 mr-2" /> Nueva reserva
+              </Button>
               <Button asChild variant="outline" className="w-full sm:w-auto">
                 <Link to="/register-complex"><Plus className="w-4 h-4 mr-2" />Nuevo Complejo</Link>
               </Button>
@@ -150,6 +203,7 @@ const OwnerDashboard = () => {
                 <Link to="/">Ir al sitio</Link>
               </Button>
             </div>
+            
           </div>
 
           <div className="container mx-auto px-4 pb-3">
@@ -205,8 +259,8 @@ const OwnerDashboard = () => {
                           <div className="flex items-center"><Clock className="w-4 h-4 mr-2 text-muted-foreground" />{c.payment_status === "trial" ? "Prueba" : c.payment_status === "active" ? "Plan activo" : "Plan inactivo"}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/complex/${c.id}`)} className="w-full"><Eye className="w-4 h-4 mr-2" />Ver</Button>
-                          <Button size="sm" variant="outline" className="w-full"><Settings className="w-4 h-4 mr-2" />Editar</Button>
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/owner-complex/${c.id}`)} className="w-full"><Eye className="w-4 h-4 mr-2" />Ver</Button>
+                          {/* <Button size="sm" variant="outline" className="w-full"><Settings className="w-4 h-4 mr-2" />Editar</Button> */}
                         </div>
                       </CardContent>
                     </Card>
@@ -218,81 +272,11 @@ const OwnerDashboard = () => {
 
           {/* RESERVAS */}
           {tab === "reservations" && (
-            <section>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Reservas</CardTitle>
-                  <CardDescription>Listado de reservas en tus complejos</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {resLoading ? (
-                    <div className="py-10 text-center">Cargando reservas…</div>
-                  ) : reservations.length === 0 ? (
-                    <div className="py-10 text-center text-muted-foreground">Aún no hay reservas</div>
-                  ) : (
-                    <>
-                      {/* Mobile list */}
-                      <div className="sm:hidden space-y-3">
-                        {reservations.map(r => (
-                          <Card key={r.id}>
-                            <CardContent className="p-4 space-y-1">
-                              <div className="flex justify-between">
-                                <span className="font-medium">{new Date(r.reservation_date).toLocaleDateString("es-AR")}</span>
-                                <span className="text-xs text-muted-foreground">{r.start_time.slice(0,5)} – {r.end_time.slice(0,5)}</span>
-                              </div>
-                              <div className="text-sm">{r.sport_complexes?.name} · {r.sport_courts?.name}</div>
-                              <div className="flex justify-between items-center text-sm">
-                                <span>{r.sport_courts?.sport || "-"}</span>
-                                <span className="flex items-center gap-2">
-                                  {r.total_price ? `$${r.total_price}` : "-"}
-                                  <Badge variant={r.payment_status === "paid" ? "default" : "secondary"}>
-                                    {r.payment_status || "pendiente"}
-                                  </Badge>
-                                </span>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-
-                      {/* Desktop table */}
-                      <div className="hidden sm:block">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Horario</TableHead>
-                              <TableHead>Complejo</TableHead>
-                              <TableHead>Cancha</TableHead>
-                              <TableHead>Deporte</TableHead>
-                              <TableHead>Importe</TableHead>
-                              <TableHead>Pago</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {reservations.map((r) => (
-                              <TableRow key={r.id}>
-                                <TableCell>{new Date(r.reservation_date).toLocaleDateString("es-AR")}</TableCell>
-                                <TableCell>{r.start_time.slice(0,5)} – {r.end_time.slice(0,5)}</TableCell>
-                                <TableCell>{r.sport_complexes?.name}</TableCell>
-                                <TableCell>{r.sport_courts?.name}</TableCell>
-                                <TableCell>{r.sport_courts?.sport}</TableCell>
-                                <TableCell>{r.total_price ? `$${r.total_price}` : "-"}</TableCell>
-                                <TableCell>
-                                  <Badge variant={r.payment_status === "paid" ? "default" : "secondary"}>
-                                    {r.payment_status || "pendiente"}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
+            <ReservationsCalendar
+              reservations={reservations}
+              setReservations={setReservations}
+              resLoading={resLoading}
+            />
           )}
 
           {/* NOTIFICACIONES */}
@@ -361,6 +345,12 @@ const OwnerDashboard = () => {
               </Card>
             </section>
           )}
+           <CreateReservationModal
+            isOpen={isCreateModalOpen}
+            onClose={() => setIsCreateModalOpen(false)}
+            authUserId={user?.id ?? ""}
+            onCreated={handleCreatedReservation}
+          />
         </main>
       </div>
     </>

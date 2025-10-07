@@ -145,13 +145,6 @@ const OwnersAuth = () => {
     }
   };
   
-  /**
-   * Verifica el perfil actual:
-   * - Si role !== 'owner' o faltan full_name / phone -> abrir modal
-   * - Si ya es owner y tiene todo -> ir a /dashboard
-   * NO cambia el rol desde el cliente.
-   */
-  
   
   const ensureOwnerAndMaybeSetup = async (sessionUser: {
     id: string;

@@ -7,7 +7,6 @@ import SportComplexCard from "@/components/SportComplexCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   MapPin, 
   TrendingUp, 
