@@ -19,7 +19,7 @@ interface OwnerReservation {
     start_time: string;                 // HH:mm
     end_time: string;                   // HH:mm
     total_price?: number;
-    payment_status: "pending" | "approved" | "cancelled" | "paid";
+    payment_status: "pending" | "confirmed" | "cancelled" | "paid";
     sport_complexes?: { 
       id: string; 
       name: string; 
@@ -165,7 +165,7 @@ export default function ReservationsCalendar({ reservations, setReservations, re
               eventPropGetter={(event) => {
                 const status = event.resource.payment_status;
                 let backgroundColor = "#93C5FD"; // pendiente azul
-                if (status === "approved") backgroundColor = "#34D399"; // verde
+                if (status === "confirmed") backgroundColor = "#34D399"; // verde
                 if (status === "cancelled") backgroundColor = "#F87171"; // rojo
                 return { style: { backgroundColor, color: "white", borderRadius: 6, padding: "2px" } };
               }}
@@ -274,8 +274,8 @@ export default function ReservationsCalendar({ reservations, setReservations, re
 
                 {/* Acciones */}
                 <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                {selectedEvent.payment_status !== "approved" && (
-                    <Button onClick={() => updateReservationStatus(selectedEvent.reservation_id, "approved")}>
+                {selectedEvent.payment_status !== "confirmed" && (
+                    <Button onClick={() => updateReservationStatus(selectedEvent.reservation_id, "confirmed")}>
                     Aprobar
                     </Button>
                 )}

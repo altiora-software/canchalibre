@@ -20,7 +20,7 @@ interface OwnerReservation {
   start_time: string;
   end_time: string;
   total_price?: number;
-  payment_status: "pending" | "approved" | "cancelled" | "paid";
+  payment_status: "pending" | "confirmed" | "cancelled" | "paid";
   sport_complexes?: { id: string; name: string; owner_id: string };
   sport_courts?: { name: string; sport: string };
 }
@@ -92,7 +92,7 @@ export default function ReservationsSection({ reservations, setReservations, res
                         </div>
                         <Badge
                           variant={
-                            r.payment_status === "approved"
+                            r.payment_status === "confirmed"
                               ? "default"
                               : r.payment_status === "cancelled"
                               ? "destructive"
@@ -109,10 +109,10 @@ export default function ReservationsSection({ reservations, setReservations, res
                         <span>{r.total_price ? `$${r.total_price}` : "-"}</span>
                       </div>
                       <div className="flex gap-2 mt-2 flex-wrap">
-                        {r.payment_status !== "approved" && (
+                        {r.payment_status !== "confirmed" && (
                           <Button
                             size="sm"
-                            onClick={() => updateReservationStatus(r.id, "approved")}
+                            onClick={() => updateReservationStatus(r.id, "confirmed")}
                           >
                             Aprobar
                           </Button>
