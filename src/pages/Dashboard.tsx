@@ -187,24 +187,56 @@ const OwnerDashboard = () => {
       <div className="min-h-screen bg-background">
         {/* Header + Nav (mobile-first) */}
         <div className="border-b bg-white sticky top-0 z-40">
-          <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-bold">Panel de Dueño</h1>
-              <p className="text-muted-foreground">Gestiona tus complejos, reservas y comunicación</p>
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              {/* Left: título */}
+              <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold leading-tight truncate">
+                  Panel de Dueño
+                </h1>
+                <p className="text-sm sm:text-base text-muted-foreground truncate">
+                  Gestiona tus complejos, reservas y comunicación
+                </p>
+              </div>
+
+              {/* Right: botones */}
+              <div className="w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
+                  <Button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="w-full sm:w-auto min-w-0"
+                    aria-label="Crear nueva reserva"
+                  >
+                    <Plus className="w-4 h-4 mr-2 flex-shrink-0" />
+                    <span className="truncate">Nueva reserva</span>
+                  </Button>
+
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full sm:w-auto min-w-0"
+                    aria-label="Registrar nuevo complejo"
+                  >
+                    <Link to="/register-complex" className="inline-flex items-center">
+                      <Plus className="w-4 h-4 mr-2 flex-shrink-0" />
+                      <span className="truncate">Nuevo Complejo</span>
+                    </Link>
+                  </Button>
+
+                  <Button
+                    asChild
+                    className="bg-gradient-sport w-full sm:w-auto min-w-0"
+                    aria-label="Ir al sitio"
+                  >
+                    <Link to="/" className="inline-flex items-center justify-center">
+                      <span className="truncate">Ir al sitio</span>
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={() => setIsCreateModalOpen(true)} className="w-full sm:w-auto">
-                <Plus className="w-4 h-4 mr-2" /> Nueva reserva
-              </Button>
-              <Button asChild variant="outline" className="w-full sm:w-auto">
-                <Link to="/register-complex"><Plus className="w-4 h-4 mr-2" />Nuevo Complejo</Link>
-              </Button>
-              <Button asChild className="bg-gradient-sport w-full sm:w-auto">
-                <Link to="/">Ir al sitio</Link>
-              </Button>
-            </div>
-            
           </div>
+
 
           <div className="container mx-auto px-4 pb-3">
             <Tabs value={tab} onValueChange={(v:any)=>setTab(v)} className="w-full">

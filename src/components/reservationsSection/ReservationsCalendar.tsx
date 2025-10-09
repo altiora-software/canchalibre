@@ -53,20 +53,27 @@ interface Props {
 export default function ReservationsCalendar({ reservations, setReservations, resLoading }: Props) {
   const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
     console.log('reservations dentro del componenete', reservations);
-  const events: Event[] = reservations.map((r) => {
-    console.log("Res mapeada", r);
+
+
+const events: Event[] = reservations.map((r) => {
+  // fallback: si no viene directamente, lo buscamos en nested
+  const courtName = r.court_name ?? r.sport_courts?.name ?? "Cancha";
+  const complexName = r.complex_name ?? r.sport_complexes?.name ?? "Complejo";
+  const fullName = r.full_name ?? r.profiles?.full_name ?? "Cliente";
+
   return {
-    title: `${r.court_name} · (${r.full_name})`,
+    title: `${courtName} · (${fullName})`,
     start: new Date(`${r.reservation_date}T${r.start_time}`),
     end: new Date(`${r.reservation_date}T${r.end_time}`),
     resource: {
       ...r,
-      sport_complexes: { name: r.complex_name },
-      sport_courts: { name: r.court_name, sport: r.sport },
-      profiles: { full_name: r.full_name },
+      sport_complexes: r.sport_complexes || { name: complexName },
+      sport_courts: r.sport_courts || { name: courtName, sport: r.sport ?? "Deporte" },
+      profiles: r.profiles || { full_name: fullName },
     },
   };
 });
+
 
   console.log('events',events)
 
@@ -117,7 +124,7 @@ export default function ReservationsCalendar({ reservations, setReservations, re
     time: "Hora",
     event: "Evento",
     noEventsInRange: "No hay eventos en este rango.",
-    showMore: (count: number) => `+ Ver ${count} más`,
+    showMore: (count: number) => `+ Ver`,
   };
 
   const updateReservationStatus = async (id: string, newStatus: OwnerReservation["payment_status"]) => {

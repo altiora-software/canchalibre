@@ -14,7 +14,8 @@ import {
   Star,
   ArrowRight,
   Search,
-  Loader2
+  Loader2,
+  Filter
 } from "lucide-react";
 import { useComplexes, SportComplexData } from "@/hooks/useComplexes";
 import heroImage from "@/assets/hero-sports-complex.jpg";
@@ -40,6 +41,7 @@ const Index = () => {
         )
       );
     }
+    
     
     // Filter by search term
     if (searchTerm) {
@@ -71,6 +73,17 @@ const Index = () => {
     averageRating: "4.5", // Placeholder until we add ratings
     totalSports: [...new Set(complexes.flatMap(c => c.courts?.map(court => court.sport) || []))].length
   };
+
+  const sports = [
+    { id: "todos", name: "Todos", icon: "🏆" },
+    { id: "futbol", name: "Fútbol", icon: "⚽" },
+    { id: "basquet", name: "Básquet", icon: "🏀" },
+    { id: "tenis", name: "Tenis", icon: "🎾" },
+    { id: "voley", name: "Vóley", icon: "🏐" },
+    { id: "handball", name: "Handball", icon: "🤾" },
+    { id: "skate", name: "Skate", icon: "🛹" },
+    { id: "padle", name: "Padle", icon: "🎾" },
+  ];
 
   if (loading) {
     return (
@@ -209,9 +222,43 @@ const Index = () => {
               </div>
             </div>
           </section>
+          <div className="w-full border-t border-border/50 py-4 flex justify-center">
+            <div
+              className="
+                flex flex-wrap justify-center gap-3
+                px-3 sm:px-6 md:px-8
+                lg:flex-nowrap lg:justify-center lg:overflow-visible
+                max-w-6xl w-full
+              "
+            >
+              {sports.map((sport) => (
+                <Badge
+                  key={sport.id}
+                  variant={selectedSport === sport.id ? "default" : "outline"}
+                  className={`
+                    cursor-pointer select-none
+                    text-xs sm:text-sm lg:text-sm
+                    px-2 py-1.5 sm:px-3 sm:py-2 lg:px-3 lg:py-2
+                    transition-all duration-150 rounded-lg
+                    hover:scale-105 active:scale-95
+                    whitespace-nowrap
+                    flex-initial
+                    ${selectedSport === sport.id
+                      ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                      : "hover:border-primary hover:text-primary"}
+                  `}
+                  onClick={() => setSelectedSport(sport.id)}
+                >
+                  <span className="mr-2 text-sm sm:text-base lg:text-base">{sport.icon}</span>
+                  {sport.name}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
 
           {/* Map Section */}
-          <section id="map-section" className="py-8 bg-muted/30">
+          {/* <section id="map-section" className="py-8 bg-muted/30">
             <div className="container mx-auto px-4">
               <div className="text-center mb-8">
                 <h2 className="text-3xl font-bold text-foreground mb-2">
@@ -227,7 +274,7 @@ const Index = () => {
                 onLocationSelect={handleLocationSelect}
               />
             </div>
-          </section>
+          </section> */}
 
           {/* Complexes Grid */}
           <section id="complexes-section" className="py-12">

@@ -385,7 +385,10 @@ export default function OwnerComplexPage() {
   };
 
   // --- Save complex (basic fields) ---
+  
   const saveComplex = async () => {
+    console.log("entro a save");
+  
     if (!complex || !profile) return;
     if (complex.owner_id !== profile.id) {
       toast({ title: "No permitido", description: "No sos el propietario", variant: "destructive" });
@@ -393,54 +396,195 @@ export default function OwnerComplexPage() {
     }
   
     setLoading(true);
+    setUploading(true);
   
     try {
-      setUploading(true);
+      // --- 0) Validaciones rápidas ---
+      // Asegurarnos que complex.id esté presente
+      const complexId = complex.id;
+      if (!complexId) throw new Error("ID del complejo no disponible");
   
-      // Subir nuevas fotos a Storage
-      const uploadedUrls: string[] = [];
-      for (const photo of localPhotos) {
-        if (typeof photo === "string") {
-          uploadedUrls.push(photo); // ya subida
-        } else {
-          const ext = photo.name.split(".").pop();
-          const filename = `${Date.now()}-${photo.name}`;
-          const path = `${complex.id}/${filename}`;
-          const { error } = await supabase.storage.from("complex-photos").upload(path, photo, { upsert: true });
-          if (error) throw error;
-          const { data } = supabase.storage.from("complex-photos").getPublicUrl(path);
-          uploadedUrls.push(data.publicUrl);
+      // --- 1) PERSISTIR CANCHAS PRIMERO ---
+      // Separamos nuevas canchas (sin id) y existentes (con id)
+      const newCourts = courts.filter(c => !c.id).map(c => ({
+        complex_id: complexId,
+        name: c.name,
+        sport: c.sport,
+        players_capacity: c.playersCapacity,
+        surface_type: c.surfaceType,
+        has_lighting: c.hasLighting,
+        has_roof: c.hasRoof,
+        hourly_price: c.hourlyPrice,
+      }));
+  
+      const existingCourts = courts.filter(c => c.id).map(c => ({
+        id: c.id!,
+        name: c.name,
+        sport: c.sport,
+        players_capacity: c.playersCapacity,
+        surface_type: c.surfaceType,
+        has_lighting: c.hasLighting,
+        has_roof: c.hasRoof,
+        hourly_price: c.hourlyPrice,
+        complex_id: complexId,
+      }));
+  
+      // Insertar nuevas canchas (si hay)
+      if (newCourts.length > 0) {
+        console.log("Insertando canchas nuevas:", newCourts);
+        // Ensure sport is of the correct type
+        const formattedNewCourts = newCourts.map(court => ({
+          ...court,
+          sport: court.sport as "futbol" | "basquet" | "tenis" | "voley" | "handball" | "skate" | "padle"
+        }));
+        const { error: courtsInsertError } = await supabase.from("sport_courts").insert(formattedNewCourts);
+        if (courtsInsertError) {
+          console.error("Error insertando canchas:", courtsInsertError);
+          throw courtsInsertError;
         }
       }
   
-      // Payload final del complejo
+      // Actualizar canchas existentes (si las hay) — secuencial por RLS/claridad
+      for (const c of existingCourts) {
+        try {
+          const { error: updErr } = await supabase.from("sport_courts").update({
+            name: c.name,
+            sport_complex: c.sport,
+            players_capacity: c.players_capacity,
+            surface_type: c.surface_type,
+            has_lighting: c.has_lighting,
+            has_roof: c.has_roof,
+            hourly_price: c.hourly_price,
+            complex_id: c.complex_id,
+          }).eq("id", c.id);
+          if (updErr) {
+            console.warn("No se pudo actualizar cancha id:", c.id, updErr);
+            // no tiramos excepción para intentar continuar con el resto,
+            // pero registramos el warning para debug.
+          }
+        } catch (err) {
+          console.warn("Excepción actualizando cancha", c.id, err);
+        }
+      }
+  
+      // --- 2) SUBIR/RESOLVER IMÁGENES ---
+      // localPhotos puede contener File o string (URLs)
+      const filesToUpload = localPhotos
+        .map(p => (typeof p === "string" ? null : p as File))
+        .filter(Boolean) as File[];
+  
+      console.log("Files a subir:", filesToUpload);
+  
+      const uploadPromises = filesToUpload.map(async (file) => {
+        try {
+          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\.-]/g, "");
+          const filename = `${Date.now()}-${safeName}`;
+          const path = `${complexId}/${filename}`;
+  
+          const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: true });
+          if (upErr) {
+            console.error("upload error for", file.name, upErr);
+            throw upErr;
+          }
+  
+          const { data } = supabase.storage.from("complex-photos").getPublicUrl(path);
+          const publicUrl = data?.publicUrl;
+          if (!publicUrl) throw new Error("No publicUrl returned from storage.getPublicUrl()");
+          console.log("uploaded:", file.name, "->", publicUrl);
+          return publicUrl;
+        } catch (err) {
+          console.error("file upload failed:", file.name, err);
+          return null;
+        }
+      });
+  
+      const settled = await Promise.allSettled(uploadPromises);
+      const newlyUploaded = settled
+        .map(s => (s.status === "fulfilled" ? s.value : null))
+        .filter((v): v is string | null => true)
+        .filter(Boolean) as string[];
+  
+      // --- 3) CONSTRUIR finalPhotos ---
+      // Conservamos las URLs existentes (strings) y agregamos las newlyUploaded
+      const existingStrings = localPhotos.filter(p => typeof p === "string") as string[];
+      const finalPhotos = [...existingStrings, ...newlyUploaded];
+  
+      console.log("existingStrings:", existingStrings);
+      console.log("newlyUploaded:", newlyUploaded);
+      console.log("finalPhotos:", finalPhotos);
+  
+      // --- 4) ACTUALIZAR sport_complexes (payload) ---
       const payload: Partial<ComplexShape> = {
         ...form,
-        photos: uploadedUrls,
+        photos: finalPhotos,
+        // Si por RLS necesitás incluir owner_id, añadí: owner_id: complex.owner_id ?? profile.id
       };
+  
+      console.log("payload a enviar:", payload);
   
       const { data, error } = await supabase
         .from("sport_complexes")
         .update(payload)
-        .eq("id", complex.id)
+        .eq("id", complexId)
         .select()
         .maybeSingle();
   
-      if (error) throw error;
+      if (error) {
+        console.error("update complex error:", error);
+        // Mensaje específico para RLS si aparece
+        const msg = error?.message ?? String(error);
+        if (/row-level|polic/i.test(msg)) {
+          toast({
+            title: "Error de permisos",
+            description: "Política RLS impide la operación. Revisa owner_id y las policies.",
+            variant: "destructive",
+          });
+        } else {
+          toast({ title: "Error", description: msg, variant: "destructive" });
+        }
+        throw error;
+      }
   
+      // --- 5) REFRESCAR ESTADOS LOCALES ---
       if (data) {
+        // data incluye sport_courts? si no, refrescamos manualmente abajo
         setForm(data);
         setComplex(data);
         setLocalPhotos(data.photos ?? []);
       }
+  
+      // Después de actualizar complex, refrescamos canchas desde DB para asegurar estado consistente
+      try {
+        const { data: refreshed, error: refErr } = await supabase
+          .from("sport_complexes")
+          .select("*, sport_courts(*)")
+          .eq("id", complexId)
+          .maybeSingle();
+        if (refErr) {
+          console.warn("No se pudo refrescar complejo después de save:", refErr);
+        } else if (refreshed) {
+          setComplex(refreshed);
+          setForm(refreshed);
+          const cts = (refreshed.sport_courts ?? []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            sport: c.sport,
+            playersCapacity: c.players_capacity ?? 4,
+            surfaceType: c.surface_type ?? "",
+            hasLighting: c.has_lighting ?? false,
+            hasRoof: c.has_roof ?? false,
+            hourlyPrice: c.hourly_price ?? 0,
+          }));
+          setCourts(cts);
+        }
+      } catch (err) {
+        console.warn("Error refrescando canchas:", err);
+      }
+  
       setEditing(false);
-  
-      // Sincronizar canchas
-      await syncCourtsToDB();
-  
       toast({ title: "Guardado", description: "Cambios guardados correctamente." });
     } catch (err: any) {
-      console.error(err);
+      console.error("saveComplex general error:", err);
       toast({ title: "Error", description: err?.message ?? String(err), variant: "destructive" });
     } finally {
       setUploading(false);
@@ -448,6 +592,34 @@ export default function OwnerComplexPage() {
     }
   };
   
+  const checkPendingReservation = async () => {
+    try {
+        const { data: pendingCheck, error: pendingErr } = await supabase
+          .from("reservations")
+          .select("id")
+          .eq("user_id", profile?.id)
+          .eq("complex_id", complex?.id)
+          .eq("payment_status", "pending")
+          .limit(1)
+          .maybeSingle();
+      console.log('data', pendingCheck)
+      console.log('error', pendingErr)
+        if (pendingErr) {
+          console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
+          // opcional: permitir continuar y dejar que la DB haga la última validación
+        } else if (pendingCheck) {
+          toast({
+            title: "Reserva pendiente",
+            description: "Ya tenés una reserva pendiente para este complejo. Cancelala o finalizala antes de crear otra.",
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Error comprobando pendientes (frontend):", err);
+        // opcional: seguir y dejar que DB bloquee si es necesario
+      }
+  }
 
   // --- Reservations (rpc) ---
   const loadReservations = async () => {
@@ -470,6 +642,7 @@ export default function OwnerComplexPage() {
   };
 
   const handleCreatedReservation = (res: ModalOwnerReservation) => {
+    checkPendingReservation();
     setReservations(prev => [{ ...res }, ...prev]);
     toast({ title: "Reserva creada", description: "Se agregó la reserva al calendario." });
   };

@@ -114,6 +114,35 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
     })();
   }, [isOpen, selectedCourt, ymd]);
   
+  const checkPendingReservation = async () => {
+    try {
+        const { data: pendingCheck, error: pendingErr } = await supabase
+          .from("reservations")
+          .select("id")
+          .eq("user_id", user?.id)
+          .eq("complex_id", complex.id)
+          .eq("payment_status", "pending")
+          .limit(1)
+          .maybeSingle();
+      console.log('data', pendingCheck)
+      console.log('error', pendingErr)
+        if (pendingErr) {
+          console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
+          // opcional: permitir continuar y dejar que la DB haga la última validación
+        } else if (pendingCheck) {
+          toast({
+            title: "Reserva pendiente",
+            description: "Ya tenés una reserva pendiente para este complejo. comunicate con el complejo si necesitas cancelarla.",
+            variant: "destructive" 
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error("Error comprobando pendientes (frontend):", err);
+        // opcional: seguir y dejar que DB bloquee si es necesario
+      }
+  }
 
   // recalcular precio
   useEffect(() => {
@@ -187,6 +216,7 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
         notes: notes || undefined
       };
 
+      checkPendingReservation();
       const { data, error } = await createReservation(reservationData);
       if (error) {
         toast({ title: "Error", description: error, variant: "destructive" });
