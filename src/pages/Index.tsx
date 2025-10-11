@@ -1,62 +1,63 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
-import MapSection from "@/components/MapSection";
-import SportComplexCard from "@/components/SportComplexCard";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { 
-  MapPin, 
-  TrendingUp, 
-  Users, 
-  Star,
   ArrowRight,
-  Search,
   Loader2,
-  Filter
+  MapPin,
+  Search,
+  Users
 } from "lucide-react";
 import { useComplexes, SportComplexData } from "@/hooks/useComplexes";
 import heroImage from "@/assets/hero-sports-complex.jpg";
+import { useAuth } from "@/hooks/useAuth";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import SportComplexCard from "@/components/SportComplexCard";
+import { Badge } from "@/components/ui/badge";
+import { useProfile } from "@/hooks/useProfile";
 
 const Index = () => {
   const navigate = useNavigate();
   const [selectedSport, setSelectedSport] = useState("todos");
   const [searchTerm, setSearchTerm] = useState("");
+  const { isOwner } = useProfile()
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
-  
-  const { complexes, loading, error } = useComplexes();
+  const { user, loading: authLoading } = useAuth();
 
-  console.log('complexes', complexes)
-  // Filter complexes based on selected sport and search term
-  const filteredComplexes = useMemo(() => {
-    let filtered = complexes;
-    
-    // Filter by sport
-    if (selectedSport !== "todos") {
-      filtered = filtered.filter(complex => 
-        complex.courts?.some(court => 
-          court.sport.toLowerCase().includes(selectedSport.toLowerCase())
-        )
-      );
+  useEffect(() => {
+    if (isOwner) {
+      navigate("/dashboard", { replace: true });
+    } else {
+      navigate("/", { replace: true });
     }
-    
-    
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(complex =>
-        complex.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        complex.neighborhood?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        complex.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        complex.courts?.some(court => 
-          court.sport.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
-    }
-    
-    return filtered;
-  }, [complexes, selectedSport, searchTerm]);
+  }, [isOwner, navigate]);
+  // 1) pasar un valor "seguro" al hook para evitar acceder a user.id cuando user === null
+  //    (useComplexes debe manejar un id vacío o undefined; si no, adaptar useComplexes)
+  const userIdSafe = user?.id ?? ""; // o undefined si el hook lo soporta
+  const { complexes, loading } = useComplexes(user?.id ?? undefined, false);
+
+  console.log("user", user);
+  console.log("complexes", complexes);
+  console.log("loading", loading);
+
+  // 3) si no hay user aún, podés mostrar un loader compacto (opcional)
+  //    Esto evita que la UI que asume datos del usuario intente renderizar antes de tiempo.
+  if (!user && loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="w-6 h-6 animate-spin" />
+          <span>Cargando usuario y canchas...</span>
+        </div>
+      </div>
+    );
+  }
+
+// Filter complexes based on selected sport and search term (robust)
+
+
 
   const handleComplexDetails = (complex: SportComplexData) => {
     navigate(`/complex/${complex.id}`);
@@ -66,12 +67,12 @@ const Index = () => {
     setSelectedLocation(location);
   };
 
-  // Statistics
+  // Statistics (usar valores por defecto)
   const stats = {
     totalComplexes: complexes.length,
     openNow: complexes.filter(c => c.is_active).length,
-    averageRating: "4.5", // Placeholder until we add ratings
-    totalSports: [...new Set(complexes.flatMap(c => c.courts?.map(court => court.sport) || []))].length
+    averageRating: "4.5",
+    totalSports: [...new Set(complexes.flatMap(c => c.courts?.map(court => court?.sport) || []))].length
   };
 
   const sports = [
@@ -85,7 +86,63 @@ const Index = () => {
     { id: "padle", name: "Padle", icon: "🎾" },
   ];
 
-  if (loading) {
+  // Filtro común, sin useMemo
+let filteredComplexes: SportComplexData[] = [];
+
+try {
+  const list = Array.isArray(complexes) ? complexes : [];
+
+  const sportFilter = (selectedSport ?? "todos").toString().toLowerCase();
+  const term = (searchTerm ?? "").toString().trim().toLowerCase();
+
+  if (sportFilter === "todos" && term === "") {
+    filteredComplexes = list;
+  } else {
+    filteredComplexes = list.filter((complex) => {
+      const name = (complex?.name ?? "").toString().toLowerCase();
+      const neighborhood = (complex?.neighborhood ?? "").toString().toLowerCase();
+      const address = (complex?.address ?? "").toString().toLowerCase();
+      const courts = Array.isArray(complex?.courts) ? complex.courts : [];
+
+      // 1️⃣ Filtro por deporte
+      if (sportFilter !== "todos") {
+        const hasSport = courts.some((court) => {
+          try {
+            return (court?.sport ?? "")
+              .toString()
+              .toLowerCase()
+              .includes(sportFilter);
+          } catch {
+            return false;
+          }
+        });
+
+        if (!hasSport) return false;
+      }
+
+      // 2️⃣ Filtro por término de búsqueda
+      if (term) {
+        const matchesText =
+          name.includes(term) ||
+          neighborhood.includes(term) ||
+          address.includes(term) ||
+          courts.some((court) =>
+            (court?.sport ?? "").toString().toLowerCase().includes(term)
+          );
+
+        if (!matchesText) return false;
+      }
+
+      return true;
+    });
+  }
+} catch (e) {
+  console.error("Error en filtro de complejos:", e);
+  filteredComplexes = Array.isArray(complexes) ? complexes : [];
+}
+
+
+  if (loading && complexes.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -100,44 +157,11 @@ const Index = () => {
     <>
       <Helmet>
         <title>Cancha Libre - Encuentra las Mejores Canchas Deportivas en San Salvador de Jujuy</title>
-        <meta name="description" content="Descubre y reserva canchas deportivas en San Salvador de Jujuy. Fútbol, básquet, tenis, vóley, handball, padle y skateparks. Encuentra horarios, precios y contacta por WhatsApp." />
-        <meta name="keywords" content="canchas deportivas Jujuy, fútbol 5 San Salvador, básquet Jujuy, tenis Jujuy, reservar cancha deportiva, complejos deportivos Argentina" />
-        <link rel="canonical" href="https://canchasjujuy.com" />
-        
-        {/* Open Graph */}
-        <meta property="og:title" content="Cancha Libre - Las Mejores Canchas Deportivas" />
-        <meta property="og:description" content="Encuentra y reserva canchas deportivas en San Salvador de Jujuy. Más de 50 complejos disponibles." />
+        <meta name="description" content="Descubre y reserva canchas deportivas..." />
         <meta property="og:image" content={heroImage} />
-        <meta property="og:type" content="website" />
-        
-        {/* Local Business Schema */}
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "Cancha Libre",
-            "description": "Plataforma para encontrar y reservar canchas deportivas en San Salvador de Jujuy",
-            "address": {
-              "@type": "PostalAddress",
-              "addressLocality": "San Salvador de Jujuy",
-              "addressRegion": "Jujuy",
-              "addressCountry": "AR"
-            },
-            "geo": {
-              "@type": "GeoCoordinates",
-              "latitude": -24.1858,
-              "longitude": -65.3004
-            },
-            "url": "https://canchasjujuy.com",
-            "telephone": "+54-388-XXX-XXXX",
-            "openingHours": "Mo-Su 00:00-23:59",
-            "priceRange": "$$$"
-          })}
-        </script>
       </Helmet>
 
       <div className="min-h-screen bg-background">
-        {/* Header */}
         <Header
           selectedSport={selectedSport}
           onSportChange={setSelectedSport}
@@ -145,7 +169,7 @@ const Index = () => {
           onSearchChange={setSearchTerm}
         />
 
-        <main>
+      <main>
           {/* Hero Section */}
           <section className="relative min-h-[60vh] flex items-center justify-center overflow-hidden">
             {/* Background Image */}
@@ -456,7 +480,7 @@ const Index = () => {
           </section>
         </main>
 
-        {/* Footer */}
+        {/* — Footer— */}
         <footer className="bg-foreground text-white py-8">
           <div className="container mx-auto px-4 text-center">
             <div className="flex items-center justify-center space-x-2 mb-4">

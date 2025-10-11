@@ -344,9 +344,77 @@ export type Database = {
         ]
       }
     }
-    Views: {
-      [_ in never]: never
-    }
+      Views: {
+        // extensions schema (system / contrib views)
+        pg_stat_statements: {
+          Row: any
+          Relationships: []
+        }
+        pg_stat_statements_info: {
+          Row: any
+          Relationships: []
+        }
+
+        // public schema views
+        reservations_with_names: {
+          Row: any
+          Relationships: []
+        }
+        reservations_with_profiles: {
+          Row: any
+          Relationships: []
+        }
+
+        // sport_complexes public view (no contact fields)
+        sport_complexes_public: {
+          Row: {
+            id: string
+            name: string
+            description: string | null
+            address: string
+            neighborhood: string | null
+            latitude: number | null
+            longitude: number | null
+            website: string | null
+            photos: string[] | null
+            amenities: string[] | null
+            opening_hours: Json | null
+            is_active: boolean | null
+            is_approved: boolean | null
+          }
+          Relationships: []
+        }
+
+        // sport_complexes public view that includes contact (only for authenticated access)
+        sport_complexes_public_with_contact: {
+          Row: {
+            id: string
+            name: string
+            description: string | null
+            address: string
+            neighborhood: string | null
+            latitude: number | null
+            longitude: number | null
+            website: string | null
+            photos: string[] | null
+            amenities: string[] | null
+            opening_hours: Json | null
+            is_active: boolean | null
+            is_approved: boolean | null
+            phone: string | null
+            whatsapp: string | null
+            email: string | null
+          }
+          Relationships: []
+        }
+
+        // vault schema
+        decrypted_secrets: {
+          Row: any
+          Relationships: []
+        }
+      }
+
     Functions: {
       get_current_user_role: {
         Args: Record<PropertyKey, never>

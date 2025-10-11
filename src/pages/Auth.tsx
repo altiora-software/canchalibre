@@ -60,7 +60,7 @@ const Auth = () => {
     }
   };
 
-  const ensureProfileRoleOnce = async (role: "user" | "owner") => {
+  const ensureProfileRoleOnce = async (role: "user") => {
     const { data: { session } } = await supabase.auth.getSession();
     const sUser = session?.user;
     if (!sUser) return;
