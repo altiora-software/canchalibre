@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre BFF"
+  short_description: "Alinea contratos UI RPC y funciones"
+  default_prompt: "Use $canchalibre-bff to evolve an API contract safely."

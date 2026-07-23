@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre Knowledge"
+  short_description: "Mantiene árbol grafo e historial"
+  default_prompt: "Use $canchalibre-knowledge to update project knowledge."

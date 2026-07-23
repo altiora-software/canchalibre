@@ -1,4 +1,7 @@
 project_id = "myqjmfficlxrefjhlewo"
 
 [functions.send-whatsapp-notification]
-verify_jwt = false
+verify_jwt = true
+
+[functions.owner-onboarding]
+verify_jwt = true

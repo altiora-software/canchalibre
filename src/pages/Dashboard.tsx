@@ -448,8 +448,11 @@ import OwnerHeader from "@/components/HeaderOwner";
             <CreateReservationModal
               isOpen={isCreateModalOpen}
               onClose={() => setIsCreateModalOpen(false)}
-              authUserId={user?.id ?? ""}
-              onCreated={handleCreatedReservation}
+              complexId={complexes[0]?.id ?? ""}
+              onCreated={() => {
+                void loadReservations();
+                setTab("reservations");
+              }}
             />
           </main>
         </div>

@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "entrypoints": {
+    "universal": "../AGENTS.md",
+    "compact_context": "../docs/agent-context.md",
+    "knowledge_tree": "../docs/knowledge-tree.html",
+    "knowledge_graph": "../docs/knowledge-graph.html",
+    "task_router": "task-router.md",
+    "protocol": "PROTOCOL.md"
+  },
+  "mandatory_sequence": [
+    "compact_context",
+    "knowledge_tree",
+    "knowledge_graph",
+    "task_router",
+    "role_and_skill",
+    "linked_changes"
+  ],
+  "skills": {
+    "context": "canchalibre-context",
+    "frontend": "canchalibre-frontend",
+    "backend": "canchalibre-backend",
+    "bff": "canchalibre-bff",
+    "quality": "canchalibre-quality",
+    "knowledge": "canchalibre-knowledge"
+  },
+  "closeout": {
+    "change_template": "templates/knowledge-update.md",
+    "change_log": "../docs/knowledge/changes/",
+    "update_tree_and_graph_for_stable_knowledge": true
+  }
+}

@@ -115,7 +115,7 @@ const OwnersAuth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const ensureProfileRoleOnce = async (role: "user" | "owner") => {
+  const ensureProfileExists = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const sUser = session?.user;
     if (!sUser) return;
@@ -133,13 +133,12 @@ const OwnersAuth = () => {
   
     if (profErr) console.debug("profiles fetch warn:", profErr.message);
   
-    // Solo si NO existe, lo creo con el rol correspondiente
+    // El rol lo asigna exclusivamente el flujo seguro de owner-onboarding.
     if (!prof) {
       const { error: insErr } = await supabase.from("profiles").insert({
         user_id: uid,
         email,
         full_name: metaName || null,
-        role,
       });
       if (insErr) console.debug("profiles insert warn:", insErr.message);
     }
@@ -197,7 +196,7 @@ const OwnersAuth = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         try {
-          await ensureProfileRoleOnce("owner");
+          await ensureProfileExists();
           await ensureOwnerAndMaybeSetup(session.user);
         } catch (e: any) {
           console.error("ensureOwner:", e?.message || e);
@@ -266,19 +265,14 @@ const OwnersAuth = () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) throw new Error("Sesión no disponible");
     
-        const uid = session.user.id;
-    
-        // Actualizamos el perfil directamente
-        const { error: updateErr } = await supabase
-          .from("profiles")
-          .update({
-            full_name: payload.ownerName,
-            phone: payload.ownerPhone.replace(/\D/g, ""),
-            role: "owner", // promovemos directamente
-          })
-          .eq("user_id", uid);
-    
-        if (updateErr) throw updateErr;
+        const { error: onboardingError } = await supabase.functions.invoke("owner-onboarding", {
+          body: {
+            ownerName: payload.ownerName,
+            ownerPhone: payload.ownerPhone,
+          },
+        });
+
+        if (onboardingError) throw onboardingError;
     
         toast({
           title: "¡Listo!",

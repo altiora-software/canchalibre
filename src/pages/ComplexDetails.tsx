@@ -21,7 +21,6 @@ import { SportComplexData, useComplexes } from "@/hooks/useComplexes";
 import { useAuth } from "@/hooks/useAuth";
 import BookingModal from "@/components/BookingModal";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 
 const ComplexDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -61,36 +60,6 @@ const ComplexDetails = () => {
     }
     setShowBookingModal(true);
   };
-
-  function useComplexById(id?: string) {
-    const { complexes } = useComplexes();
-    const [complex, setComplex] = useState<SportComplexData|null>(null);
-    const [loading, setLoading] = useState(true);
-  
-    useEffect(() => {
-      let cancelled = false;
-      (async () => {
-        if (!id) return;
-        const cached = complexes.find(c => c.id === id);
-        if (cached) { setComplex(cached); setLoading(false); return; }
-  
-        const { data } = await supabase
-          .from("sport_complexes")
-          .select(`*, sport_courts (*)`)
-          .eq("id", id)
-          .maybeSingle();
-  
-        if (!cancelled) {
-          setComplex(data ? { ...data, courts: data.sport_courts ?? [] } : null);
-          setLoading(false);
-        }
-      })();
-      return () => { cancelled = true; };
-    }, [id, complexes]);
-  
-    return { complex, loading };
-  }
-  
 
   const handleWhatsAppContact = () => {
     if (!complex) return;

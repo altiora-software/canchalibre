@@ -24,7 +24,7 @@ type Block = { start: string; end: string }; // "HH:MM"
 const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { createReservation, fetchAvailableSlots, checkSlotAvailability } = useReservations();
+  const { createReservation, checkSlotAvailability } = useReservations();
   
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedCourt, setSelectedCourt] = useState<string>("");
@@ -37,8 +37,15 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const [totalPrice, setTotalPrice] = useState<number>(0);
 
   
+  const toLocalDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
   const ymd = useMemo(
-    () => (selectedDate ? new Date(selectedDate).toISOString().slice(0, 10) : null),
+    () => (selectedDate ? toLocalDate(selectedDate) : null),
     [selectedDate ? selectedDate.toDateString() : null]
   );
   const lastFetchKey = useRef<string | null>(null);
@@ -114,35 +121,40 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
     })();
   }, [isOpen, selectedCourt, ymd]);
   
-  const checkPendingReservation = async () => {
+  const checkPendingReservation = async (): Promise<boolean> => {
+    if (!user) return false;
+
     try {
-        const { data: pendingCheck, error: pendingErr } = await supabase
-          .from("reservations")
-          .select("id")
-          .eq("user_id", user?.id)
-          .eq("complex_id", complex.id)
-          .eq("payment_status", "pending")
-          .limit(1)
-          .maybeSingle();
-      console.log('data', pendingCheck)
-      console.log('error', pendingErr)
-        if (pendingErr) {
-          console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
-          // opcional: permitir continuar y dejar que la DB haga la última validación
-        } else if (pendingCheck) {
-          toast({
-            title: "Reserva pendiente",
-            description: "Ya tenés una reserva pendiente para este complejo. comunicate con el complejo si necesitas cancelarla.",
-            variant: "destructive" 
-          });
-          setLoading(false);
-          return;
-        }
-      } catch (err) {
-        console.error("Error comprobando pendientes (frontend):", err);
-        // opcional: seguir y dejar que DB bloquee si es necesario
+      const { data: pendingCheck, error: pendingErr } = await supabase
+        .from("reservations")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("complex_id", complex.id)
+        .eq("payment_status", "pending")
+        .limit(1)
+        .maybeSingle();
+
+      if (pendingErr) {
+        // The RPC still enforces the authoritative reservation rules.
+        console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
+        return true;
       }
-  }
+
+      if (pendingCheck) {
+        toast({
+          title: "Reserva pendiente",
+          description: "Ya tenés una reserva pendiente para este complejo. Comunicate con el complejo si necesitás cancelarla.",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error("Error comprobando pendientes (frontend):", err);
+      return true;
+    }
+  };
 
   // recalcular precio
   useEffect(() => {
@@ -172,7 +184,7 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
   // -------------------- submit --------------------
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !selectedDate || !selectedCourt || !startTime || !endTime) {
+    if (!user || !selectedDate || !ymd || !selectedCourt || !startTime || !endTime) {
       toast({ title: "Error", description: "Por favor completa todos los campos requeridos", variant: "destructive" });
       return;
     }
@@ -189,34 +201,27 @@ const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
       // chequeo en servidor por condiciones de carrera
       const isAvailable = await checkSlotAvailability(
         selectedCourt,
-        selectedDate.toISOString().split('T')[0],
+        ymd,
         startTime,
         endTime
       );
-      if (!isAvailable) {
+      if (isAvailable === false) {
         toast({ title: "Error", description: "El horario seleccionado ya no está disponible", variant: "destructive" });
         setLoading(false);
         return;
       }
 
-      const depositAmount = paymentMethod === 'cash' ? totalPrice * 0.3 : 0;
-
       const reservationData = {
-        user_id: user.id,
-        complex_id: complex.id,
         court_id: selectedCourt,
-        reservation_date: selectedDate.toISOString().split('T')[0],
+        reservation_date: ymd,
         start_time: startTime,
         end_time: endTime,
-        total_price: totalPrice,
         payment_method: paymentMethod,
-        payment_status: 'pending' as any,
-        deposit_amount: depositAmount,
-        deposit_paid: false,
         notes: notes || undefined
       };
 
-      checkPendingReservation();
+      if (!(await checkPendingReservation())) return;
+
       const { data, error } = await createReservation(reservationData);
       if (error) {
         toast({ title: "Error", description: error, variant: "destructive" });

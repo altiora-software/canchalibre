@@ -100,14 +100,14 @@ export const useReservations = () => {
     date: string,        // "YYYY-MM-DD"
     start: string,       // "HH:MM" o "HH:MM:SS"
     end: string
-  ): Promise<boolean> => {
+  ): Promise<boolean | null> => {
     // normalizamos a HH:MM:SS para comparar
     const s = start.length === 5 ? `${start}:00` : start;
     const e = end.length === 5 ? `${end}:00` : end;
 
     // Overlap correcto (final exclusivo):
     // existing.start < newEnd  &&  existing.end > newStart
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from("reservations")
       .select("id", { count: "exact", head: true }) // más liviano: HEAD + count
       .eq("court_id", courtId)
@@ -118,26 +118,40 @@ export const useReservations = () => {
     if (error) {
       console.debug("checkSlotAvailability warn:", error);
       // No bloquees si falla la verificación, deja continuar
-      return true;
+      return null;
     }
 
   // count viene en data?.length cuando no usamos head:true;
   // con head:true, supabase coloca el total en headers -> pero el SDK
   // igual retorna data=null; usamos error==null => disponible
   // más simple: repitamos la select sin head:
-  return true; // si usas head:true, deja esto y cambia a la versión sin head abajo
-}
+    return (count ?? 0) === 0;
+  };
 
-  const createReservation = async (reservationData: Omit<ReservationData, 'id' | 'created_at' | 'updated_at'>) => {
+  type CreateReservationInput = {
+    court_id: string;
+    reservation_date: string;
+    start_time: string;
+    end_time: string;
+    payment_method: ReservationData['payment_method'];
+    notes?: string;
+  };
+
+  const createReservation = async (reservationData: CreateReservationInput) => {
     try {
-      const { data, error } = await supabase
-        .from('reservations')
-        .insert([reservationData])
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('create_reservation' as never, {
+        p_court_id: reservationData.court_id,
+        p_reservation_date: reservationData.reservation_date,
+        p_start_time: reservationData.start_time,
+        p_end_time: reservationData.end_time,
+        p_payment_method: reservationData.payment_method,
+        p_notes: reservationData.notes ?? null,
+      } as never);
 
       if (error) throw error;
-      return { data, error: null };
+      const reservation = data as unknown as ReservationData | null;
+      if (!reservation) throw new Error('La reserva no devolvió un resultado.');
+      return { data: reservation as ReservationData, error: null };
     } catch (err: any) {
       return { data: null, error: err.message };
     }

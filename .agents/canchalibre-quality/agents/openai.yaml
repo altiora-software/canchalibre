@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre Quality"
+  short_description: "Valida calidad release y operaciones"
+  default_prompt: "Use $canchalibre-quality to validate a production change."

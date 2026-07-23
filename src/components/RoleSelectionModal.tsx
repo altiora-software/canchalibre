@@ -26,10 +26,9 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
     setLoading(true);
 
     try {
-      // Update user metadata with the selected role
+      // User metadata is not an authorization boundary; roles are never kept here.
       const { error: updateError } = await supabase.auth.updateUser({
         data: {
-          role: role,
           phone: phone,
           full_name: userName
         }
@@ -40,19 +39,25 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
       // Create or update the profile in the database (upsert)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            user_id: user.id,
-            role: forceRole || role,
-            phone: phone,
-            full_name: userName,
-            email: userEmail
-          }, {
-            onConflict: 'user_id'
-          });
+        const requestedRole = forceRole || role;
 
-        if (profileError) throw profileError;
+        if (requestedRole === 'owner') {
+          const { error: onboardingError } = await supabase.functions.invoke('owner-onboarding', {
+            body: { ownerName: userName, ownerPhone: phone },
+          });
+          if (onboardingError) throw onboardingError;
+        } else {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert({
+              user_id: user.id,
+              phone: phone || null,
+              full_name: userName || null,
+              email: userEmail || null,
+            }, { onConflict: 'user_id' });
+
+          if (profileError) throw profileError;
+        }
       }
 
       toast({

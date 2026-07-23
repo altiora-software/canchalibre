@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre Backend"
+  short_description: "Gestiona Supabase y RLS de forma segura"
+  default_prompt: "Use $canchalibre-backend to change Supabase safely."

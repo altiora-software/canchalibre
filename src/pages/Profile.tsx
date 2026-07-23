@@ -80,7 +80,11 @@ const Profile = () => {
 
   const onSelectSport = (s: string) => {
     const list = new Set(draft.fav_sports || []);
-    list.has(s) ? list.delete(s) : list.add(s);
+    if (list.has(s)) {
+      list.delete(s);
+    } else {
+      list.add(s);
+    }
     patchDraft({ fav_sports: Array.from(list) });
   };
 
@@ -197,10 +201,8 @@ const Profile = () => {
                 <div className="relative w-24 h-24 rounded-full overflow-hidden bg-muted flex-shrink-0">
                   {localAvatarPreview ? (
                     // preview chosen file
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={localAvatarPreview} alt="avatar preview" className="w-full h-full object-cover" />
                   ) : draft.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={draft.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full grid place-items-center text-muted-foreground">

@@ -78,7 +78,7 @@ const AdminSubscriptions = () => {
     try {
       setProcessingId(complexId);
       
-      let updates: any = {
+      const updates: any = {
         payment_status: newStatus,
       };
 

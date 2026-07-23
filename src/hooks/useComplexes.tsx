@@ -36,7 +36,7 @@ export interface SportComplexData {
   courts?: CourtData[];
 }
 
-export const useComplexes = (userId: string | null, isOwner: boolean) => {
+export const useComplexes = (_userId: string | null = null, _isOwner = false) => {
   const [complexes, setComplexes] = useState<SportComplexData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -171,25 +171,14 @@ const RegisterComplex = () => {
 
     try {
       // perfil (igual que antes)
-      let { data: profile } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
         .single();
 
       if (!profile) {
-        const { data: newProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: user.id,
-            role: 'owner',
-            full_name: user.user_metadata?.full_name || user.user_metadata?.name || '',
-            email: user.email || ''
-          })
-          .select('id')
-          .single();
-        if (createError) throw createError;
-        profile = newProfile;
+        throw new Error('No se encontró un perfil de propietario. Volvé a iniciar sesión desde el portal de propietarios.');
       }
 
       // Create complex including latitude & longitude

@@ -12,8 +12,8 @@ const Auth = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  // Asegura que el perfil exista y tenga role 'user' (sin tocar perfiles ya tipados)
-  const ensureUserRole = async () => {
+  // Ensures basic profile data exists without assigning authorization roles.
+  const ensureUserProfile = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const sUser = session?.user;
     if (!sUser) return;
@@ -38,29 +38,20 @@ const Auth = () => {
       return;
     }
 
-    // Si no existe: lo creo con role 'user'
+    // New profiles receive their default role from the database, never the client.
     if (!prof) {
       const { error: insErr } = await supabase.from("profiles").insert({
         user_id: uid,
         email,
         full_name: metaName || null,
-        role: "user",
       });
       if (insErr) console.debug("profiles insert warn:", insErr.message);
       return;
     }
 
-    // Si existe pero sin rol (o null), lo seteo a 'user'
-    if (!prof.role) {
-      const { error: updErr } = await supabase
-        .from("profiles")
-        .update({ role: "user", full_name: prof.full_name || metaName || null })
-        .eq("user_id", uid);
-      if (updErr) console.debug("profiles update warn:", updErr.message);
-    }
   };
 
-  const ensureProfileRoleOnce = async (role: "user") => {
+  const ensureProfileExists = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     const sUser = session?.user;
     if (!sUser) return;
@@ -78,13 +69,12 @@ const Auth = () => {
   
     if (profErr) console.debug("profiles fetch warn:", profErr.message);
   
-    // Solo si NO existe, lo creo con el rol correspondiente
+    // Role assignment is server-controlled.
     if (!prof) {
       const { error: insErr } = await supabase.from("profiles").insert({
         user_id: uid,
         email,
         full_name: metaName || null,
-        role,
       });
       if (insErr) console.debug("profiles insert warn:", insErr.message);
     }
@@ -96,8 +86,8 @@ const Auth = () => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        await ensureProfileRoleOnce("user");
-        await ensureUserRole();
+        await ensureProfileExists();
+        await ensureUserProfile();
         navigate("/");
       }
     })();
@@ -106,7 +96,7 @@ const Auth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event) => {
         if (event === "SIGNED_IN") {
-          await ensureUserRole();
+          await ensureUserProfile();
           navigate("/");
         }
       }

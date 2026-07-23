@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre Context"
+  short_description: "Carga contexto mínimo del árbol"
+  default_prompt: "Use $canchalibre-context to orient a task before changing Cancha Libre."

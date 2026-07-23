@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cancha Libre — Árbol de conocimiento</title>
+  <style>
+    :root { color-scheme: light; --ink:#172033; --muted:#5c6b82; --bg:#f5f7fb; --card:#fff; --line:#dbe3ee; --blue:#2158d6; --critical:#c0263d; --high:#c46a00; --medium:#765600; --ok:#16724c; }
+    * { box-sizing:border-box } body { margin:0; color:var(--ink); background:var(--bg); font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif }
+    header { padding:42px max(24px,calc((100% - 1120px)/2)); color:#fff; background:linear-gradient(120deg,#102555,#2672d8) } header h1 { margin:0 0 8px; font-size:clamp(28px,4vw,42px) } header p { max-width:780px; margin:0; opacity:.92 }
+    main { max-width:1120px; padding:28px 24px 64px; margin:auto } nav { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px } nav a { color:var(--blue); background:#e8efff; padding:6px 10px; border-radius:99px; text-decoration:none; font-size:13px }
+    section { margin:20px 0; padding:24px; border:1px solid var(--line); border-radius:14px; background:var(--card); box-shadow:0 2px 10px #18223b08 } h2 { margin:0 0 14px; font-size:22px } h3 { margin:22px 0 8px; font-size:16px } p { margin:8px 0 } ul { margin:8px 0; padding-left:22px } code { padding:1px 5px; color:#26354d; background:#edf1f7; border-radius:4px; font-size:.9em } .tree { padding:18px; color:#e9f1ff; background:#142448; border-radius:10px; overflow:auto; font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre }
+    table { width:100%; border-collapse:collapse; margin:10px 0; font-size:14px } th,td { padding:9px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line) } th { color:var(--muted); font-weight:650 } .tag { display:inline-block; padding:2px 7px; border-radius:99px; font-size:12px; font-weight:700 } .critical { color:#fff; background:var(--critical) } .high { color:#fff; background:var(--high) } .medium { color:#493900; background:#ffe797 } .ok { color:#fff; background:var(--ok) } .note { padding:12px 14px; border-left:4px solid var(--blue); background:#f0f5ff; border-radius:4px }
+    footer { color:var(--muted); font-size:13px; text-align:center } @media (max-width:700px) { section { padding:17px } table { display:block; overflow-x:auto } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cancha Libre: árbol de conocimiento</h1>
+    <p>Mapa técnico y funcional generado desde el código fuente. Sirve como punto de partida verificable para futuras tareas de IA y desarrollo.</p>
+  </header>
+  <main>
+    <nav><a href="#producto">Producto</a><a href="#arquitectura">Arquitectura</a><a href="#flujos">Flujos</a><a href="#datos">Datos</a><a href="#seguridad">Auditoría</a><a href="#operacion">Operación</a><a href="#backlog">Backlog</a><a href="#agentes">Agentes</a></nav>
+
+    <section id="producto">
+      <h2>1. Qué es la aplicación</h2>
+      <p><strong>Cancha Libre</strong> es un marketplace de complejos deportivos. Los clientes descubren canchas y solicitan reservas; los propietarios crean y gestionan complejos, canchas y reservas; los administradores aprueban complejos y gestionan suscripciones/notificaciones.</p>
+      <div class="tree">canchalibre/
+├── src/                       Aplicación React
+│   ├── pages/                 Vistas y rutas
+│   ├── components/            UI de dominio, admin, reservas y shadcn
+│   ├── hooks/                 Autenticación, perfiles, complejos, reservas
+│   ├── store/                 Zustand persistido en localStorage
+│   └── integrations/supabase/ Cliente y tipos generados
+├── supabase/
+│   ├── migrations/            Esquema, RLS, funciones y evolución SQL
+│   └── functions/             Edge Functions Deno
+├── public/                    Assets estáticos
+└── docs/knowledge-tree.html   Este documento</div>
+      <h3>Actores y permisos esperados</h3>
+      <table><tr><th>Actor</th><th>Capacidades de negocio</th><th>Fuente de autorización</th></tr><tr><td>Visitante</td><td>Ver complejos aprobados y sus canchas.</td><td>RLS de Supabase para lectura pública.</td></tr><tr><td>Cliente</td><td>Autenticarse, editar perfil, crear/ver sus reservas y pagos asociados.</td><td><code>auth.users</code> + <code>profiles.role=customer</code>.</td></tr><tr><td>Propietario</td><td>Registrar/editar complejo y canchas; ver/actualizar reservas de sus complejos.</td><td><code>profiles.role=owner</code> y políticas por propiedad.</td></tr><tr><td>Administrador</td><td>Aprobar/rechazar complejos, métricas, suscripciones y avisos.</td><td>UI usa <code>app_metadata.role=admin</code>; debe alinearse estrictamente con RLS/RPC.</td></tr></table>
+    </section>
+
+    <section id="arquitectura">
+      <h2>2. Arquitectura y puntos de entrada</h2>
+      <p>SPA Vite + React 18 + TypeScript. El navegador se conecta directamente a Supabase mediante la clave pública; por ello, la seguridad real debe residir en RLS, RPC y Edge Functions, nunca sólo en la interfaz.</p>
+      <table><tr><th>Capa</th><th>Implementación</th><th>Responsabilidad</th></tr><tr><td>Bootstrap</td><td><code>src/main.tsx</code>, <code>src/App.tsx</code></td><td>Renderiza providers: React Query, Helmet, autenticación, admin, tooltips, toasts y router.</td></tr><tr><td>Presentación</td><td><code>src/pages</code>, <code>src/components</code></td><td>Catálogo, detalle, reserva, propietario, administración y legales.</td></tr><tr><td>Estado</td><td>Contextos Auth/SuperAdmin; hooks locales; Zustand</td><td>Sesión, rol UI, datos de Supabase y borradores persistidos.</td></tr><tr><td>Datos</td><td>Supabase Postgres, Auth, Storage y Edge Functions</td><td>Entidades de dominio, RLS, triggers y notificación.</td></tr><tr><td>Entrega</td><td>Vercel (<code>vercel.json</code>)</td><td>Reescribe rutas SPA al índice; no hay CI ni pruebas configuradas.</td></tr></table>
+      <h3>Rutas de la SPA</h3>
+      <table><tr><th>Ruta</th><th>Vista / propósito</th><th>Actor principal</th></tr><tr><td><code>/</code></td><td>Catálogo, filtros, mapa y tarjetas de complejos.</td><td>Público</td></tr><tr><td><code>/auth</code>, <code>/owners/auth</code></td><td>Acceso/alta de cliente y propietario.</td><td>Público</td></tr><tr><td><code>/complex/:id</code></td><td>Detalle público y <code>BookingModal</code>.</td><td>Cliente</td></tr><tr><td><code>/my-reservations</code>, <code>/profile</code></td><td>Historial de reservas y perfil.</td><td>Cliente</td></tr><tr><td><code>/dashboard</code>, <code>/register-complex</code>, <code>/owner-complex/:id</code></td><td>Gestión de propietario, complejo, canchas, fotos y reservas.</td><td>Propietario</td></tr><tr><td><code>/superadmin</code>, <code>/admin</code></td><td>Login y panel de administración.</td><td>Administrador</td></tr><tr><td><code>/privacy-policy</code>, <code>/terms-of-service</code>, <code>*</code></td><td>Legales y 404.</td><td>Público</td></tr></table>
+    </section>
+
+    <section id="flujos">
+      <h2>3. Flujos de negocio</h2>
+      <h3>Descubrimiento y reserva</h3>
+      <p>Catálogo → detalle de complejo/cancha → selección de fecha/hora → inserción de <code>reservations</code> con estado pendiente → generación de enlace/mensaje de WhatsApp. Mercado Pago no está integrado como cobro verificable: hoy es una coordinación manual.</p>
+      <h3>Alta de propietario</h3>
+      <p>Login/registro → selección de rol → datos del propietario y complejo → Edge Function <code>owner-onboarding</code> → RPC <code>promote_to_owner</code> → complejo inicialmente no aprobado y prueba de 15 días.</p>
+      <h3>Administración</h3>
+      <p>Login de administrador → métricas vía RPC → aprobación/rechazo de complejos, estado de suscripciones y envío de avisos. La interfaz contiene controles de rol, pero éstos no reemplazan los controles de base de datos.</p>
+      <div class="note"><strong>Regla de diseño para futuras tareas:</strong> toda mutación sensible (roles, aprobación, precios, pago y reserva) debe quedar validada de forma transaccional en el servidor/base; el front sólo ofrece experiencia de usuario.</div>
+    </section>
+
+    <section id="datos">
+      <h2>4. Modelo de datos conocido</h2>
+      <div class="tree">auth.users ──1:1── profiles ──1:N── sport_complexes ──1:N── sport_courts
+      │                         │                    │                 │
+      │                         │                    └────1:N─────────┴── reservations ──1:N── payment_transactions
+      │                         │                                      │
+      └─────────────────────────┴──────────────────────────────────────┘
+                                                sport_courts ──1:N── court_availability</div>
+      <table><tr><th>Entidad</th><th>Propósito / campos relevantes</th></tr><tr><td><code>profiles</code></td><td>Perfil asociado a <code>auth.users</code>: identidad, contacto, avatar y <code>role</code> (customer/owner/admin).</td></tr><tr><td><code>sport_complexes</code></td><td>Complejo, dueño, ubicación, contacto, fotos, amenities, horarios, aprobación y estado de suscripción.</td></tr><tr><td><code>sport_courts</code></td><td>Cancha: complejo, deporte, capacidad, superficie, iluminación, techo, precio y actividad.</td></tr><tr><td><code>reservations</code></td><td>Cliente, complejo/cancha, fecha, inicio/fin, precio, método/estado de pago, seña y notas.</td></tr><tr><td><code>court_availability</code></td><td>Rango de disponibilidad recurrente por cancha y día de semana.</td></tr><tr><td><code>payment_transactions</code></td><td>Registro de transacciones asociados a una reserva.</td></tr></table>
+      <p><strong>Integraciones:</strong> Google Maps/Places para ubicación; Supabase Auth/DB/Storage/Functions; WhatsApp mediante URL generada. No se identificó una pasarela Mercado Pago operativa ni un backend propio separado.</p>
+    </section>
+
+    <section id="seguridad">
+      <h2>5. Auditoría: riesgos y evidencia</h2>
+      <p>Alcance: revisión estática del repositorio. No se ejecutaron cambios ni pruebas contra datos productivos. Las migraciones son la fuente histórica; se debe contrastar su estado con el proyecto Supabase remoto antes de remediar.</p>
+      <table><tr><th>Prioridad</th><th>Hallazgo</th><th>Evidencia y consecuencia</th><th>Remediación recomendada</th></tr>
+        <tr><td><span class="tag critical">CRÍTICA</span></td><td>Escalación de privilegios por edición de perfil.</td><td>La policy de <code>profiles</code> permite UPDATE al dueño de la fila sin restringir <code>role</code>; además el cliente cambia roles directamente en <code>RoleSelectionModal</code> y <code>OwnersAuth</code>. Un usuario podría asignarse <code>admin</code>.</td><td>Revocar UPDATE genérico. Separar campos editables en policy/RPC; administrar roles exclusivamente mediante función SECURITY DEFINER con validación de admin. Auditar usuarios y roles ya existentes.</td></tr>
+        <tr><td><span class="tag critical">CRÍTICA</span></td><td>Secreto de Supabase presente en <code>.env</code> y el archivo no está ignorado.</td><td>Se identificó una variable de acceso sensible. Exponerla en Git permite tomar control del proyecto según su alcance.</td><td>Rotar inmediatamente el token en Supabase, eliminarlo del historial siguiendo procedimiento seguro, agregar <code>.env</code> a <code>.gitignore</code> y conservar sólo <code>.env.example</code> sin valores.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td>La reserva puede ignorar conflictos.</td><td><code>useReservations.checkSlotAvailability</code> consulta solapes pero retorna siempre <code>true</code>; <code>BookingModal</code> no espera ni usa correctamente la comprobación de pendiente. El UNIQUE actual sólo evita igualdad exacta, no intervalos superpuestos.</td><td>Crear RPC transaccional de reserva y constraint de exclusión/rango para intervalos activos. Validar horario, cancha aprobada/precio y usuario en el servidor.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td>Cliente puede manipular reserva y pago.</td><td>Las policies permiten insertar/actualizar reservas y transacciones con importes, estado, cancha y método controlados por cliente; no validan relación cancha-complejo, precio, estado ni transición de pago.</td><td>Eliminar escrituras directas para estas entidades. Usar RPCs con listas explícitas de campos, cálculo server-side e integración de pago idempotente por webhook.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td>Función de WhatsApp expuesta.</td><td><code>send-whatsapp-notification</code> tiene CORS <code>*</code> y <code>verify_jwt=false</code>; acepta teléfono y mensaje arbitrarios y registra PII.</td><td>Exigir JWT, restringir origen, derivar destinatario/mensaje desde reserva autorizada, rate-limit y eliminar logs de PII.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td>Autorización de admin inconsistente.</td><td>La UI verifica <code>app_metadata.role</code>, mientras roles de datos se almacenan en <code>profiles</code>; existe llamada a <code>promote_current_user_to_admin</code> desde el login. La definición actual de esa RPC no está en las migraciones del repo.</td><td>Inventariar funciones remotas, eliminar toda auto-promoción y usar una única fuente de verdad para rol/claims con pruebas de autorización.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td>Deriva y migraciones no reproducibles.</td><td>El frontend invoca RPCs/vistas que no aparecen en las migraciones (aprobación, métricas, reservas por dueño y promociones). Una migración de datos de prueba intenta usar un identificador no UUID. El esquema remoto puede diferir del repositorio.</td><td>Hacer dump/esquema de la instancia real, reconciliarlo en una baseline limpia, eliminar migraciones de prueba y regenerar los tipos de Supabase.</td></tr>
+        <tr><td><span class="tag high">ALTA</span></td><td><code>owner-onboarding</code> parece incompatible con el esquema versionado.</td><td>Usa service role, llama una RPC no versionada, asigna <code>owner_id</code> con un auth UUID cuando el FK histórico apunta a <code>profiles.id</code>, y usa estado <code>trial</code> no contemplado por el constraint histórico.</td><td>Corregir y probar la operación de onboarding contra el esquema reconciliado; validar payload, usar una sola transacción y devolver errores públicos genéricos.</td></tr>
+        <tr><td><span class="tag medium">MEDIA</span></td><td>Datos personales quedan en localStorage y logs.</td><td>Stores persistidos guardan borradores de contacto; hay numerosos <code>console.log</code> de sesiones, reservas y teléfonos.</td><td>Limpiar stores al logout, persistir sólo lo necesario y retirar logs antes de producción.</td></tr>
+        <tr><td><span class="tag medium">MEDIA</span></td><td>Calidad/tipado y reglas de dominio fragmentadas.</td><td>Numerosos <code>any</code>/<code>@ts-ignore</code>, horario 09–22 y precio fallback en UI; <code>opening_hours</code>/<code>court_availability</code> no gobiernan íntegramente el flujo.</td><td>Centralizar reglas en API/RPC, regenerar tipos de Supabase, reemplazar casts por contratos y agregar pruebas.</td></tr>
+      </table>
+    </section>
+
+    <section id="operacion">
+      <h2>6. Operación, calidad y deuda técnica</h2>
+      <ul><li><strong>Scripts:</strong> <code>npm run dev</code>, <code>npm run build</code>, <code>npm run lint</code>, <code>npm run preview</code>. No hay <code>test</code> ni <code>typecheck</code> explícitos.</li><li><strong>Dependencias principales:</strong> React, React Router, Supabase JS, TanStack Query, Zustand, Tailwind, Radix/shadcn, React Hook Form + Zod, Google Maps.</li><li><strong>Estado de documentación:</strong> <code>README.md</code> estaba vacío; este documento pasa a ser la guía de orientación inicial.</li><li><strong>Estado de tipos:</strong> <code>src/integrations/supabase/types.ts</code> parece generado, pero contiene zonas <code>any</code> y debe regenerarse desde el esquema remoto tras las correcciones.</li><li><strong>Observabilidad:</strong> no se detectaron CI, tests automatizados, Sentry/telemetría, política de backups ni runbooks de despliegue.</li></ul>
+    </section>
+
+    <section id="backlog">
+      <h2>7. Backlog de remediación propuesto</h2>
+      <ol><li><strong>Contención inmediata:</strong> rotar el secreto, revisar accesos y corregir la escalación de roles antes de cualquier nueva funcionalidad.</li><li><strong>Garantía de reservas:</strong> diseñar y migrar una operación atómica de crear/cancelar reserva; cubrir solapes, concurrencia, zona horaria, precio y estados.</li><li><strong>Autorización:</strong> auditar RLS/RPC/Edge Functions contra una matriz de permisos por actor y añadir tests de integración de acceso denegado.</li><li><strong>Notificaciones/pagos:</strong> convertir WhatsApp y Mercado Pago en integraciones server-side autenticadas, idempotentes y verificadas por webhook.</li><li><strong>Calidad:</strong> añadir typecheck, tests unitarios/E2E, CI y eliminación de logs/casts; incorporar lint sin warnings.</li><li><strong>Documentación viva:</strong> actualizar este HTML junto a cada cambio de arquitectura, migración, ruta o integración; agregar README de arranque y diagrama de despliegue.</li></ol>
+      <p class="note"><strong>Para una IA que continúe:</strong> empezar toda tarea leyendo este archivo, después los archivos del módulo afectado y las migraciones correlacionadas. No asumir que una protección visual equivale a una autorización de Supabase. Verificar primero el esquema remoto y las funciones/RLS efectivamente desplegadas.</p>
+    </section>
+    <section id="agentes">
+      <h2>8. Sistema de agentes y conocimiento incremental</h2>
+      <p>Cada tarea debe comenzar leyendo el <a href="agent-context.md">contexto compacto para agentes</a>, este árbol, el <a href="knowledge-graph.html">grafo de conocimiento</a> y los cambios vinculados. Los roles, skills, límites y protocolo quedan versionados en <a href="../.agents/README.md">.agents/</a>.</p>
+      <table><tr><th>Rol</th><th>Nodo dueño</th><th>Revisión obligatoria</th></tr><tr><td>Orquestación</td><td>Dependencias y división de tareas</td><td>Todos los cambios de alto riesgo</td></tr><tr><td>Frontend</td><td>UI, rutas, hooks, estado y contratos cliente</td><td>BFF/Backend al cambiar RPC/tipos</td></tr><tr><td>Backend for Frontend</td><td>Contratos UI, RPC, Edge Functions e integraciones</td><td>Backend + Seguridad en operaciones sensibles</td></tr><tr><td>Backend de datos</td><td>Migraciones, RLS, RPC y vistas</td><td>Seguridad para datos críticos</td></tr><tr><td>Seguridad</td><td>Roles, secretos, auth, CORS y amenazas</td><td>Bloquea riesgos críticos</td></tr><tr><td>Integraciones</td><td>Edge Functions, pagos y proveedores</td><td>Backend + Seguridad</td></tr><tr><td>QA / DevOps</td><td>Pruebas, CI, staging y release</td><td>Producción sólo con evidencia</td></tr><tr><td>Documentación</td><td>Árbol, grafo y registros</td><td>Verifica conocimiento de cierre</td></tr></table>
+      <div class="note"><strong>Contrato de cierre:</strong> no se considera terminada una tarea hasta crear un registro en <code>docs/knowledge/changes/</code> y actualizar los nodos/enlaces afectados. La plantilla y el procedimiento están en <a href="../.agents/PROTOCOL.md">.agents/PROTOCOL.md</a>.</div>
+    </section>
+    <footer>Generado por auditoría estática del repositorio el 21 de julio de 2026. Documento deliberadamente no contiene valores de secretos.</footer>
+    <section id="admin-authority">
+      <h2>9. Contrato administrativo (23/07/2026)</h2>
+      <p>La autoridad administrativa se resuelve exclusivamente desde <code>profiles.role=admin</code>. El cliente consulta <code>get_current_user_role()</code> para reflejar el acceso, pero las operaciones sensibles se autorizan de nuevo en PostgreSQL.</p>
+      <p>Los RPC <code>approve_complex</code> y <code>reject_complex</code> validan el rol administrativo, sus argumentos y los estados de suscripcion. Un propietario o cliente no puede adquirir permisos de admin ni ejecutar estas acciones.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-admin-authorization-contract.md">registro de cambio</a>. Requiere prueba de actor autorizado y denegado en staging antes de produccion.</p>
+    </section>
+    <section id="owner-manual-reservations">
+      <h2>10. Reservas y notificaciones del propietario (23/07/2026)</h2>
+      <p>El propietario puede registrar una reserva manual de telefono/presencial mediante <code>create_owner_reservation</code>. La base verifica que la cancha sea propia, calcula precio y seña, y rechaza solapes.</p>
+      <p>Las reservas creadas por clientes siguen usando <code>create_reservation</code>. Ambos origenes generan una notificacion interna para el propietario, visible solo en su panel.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -14,10 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { MapPin, UploadCloud, Trash2, Edit2, Calendar, Plus } from "lucide-react";
+import { MapPin, UploadCloud, Trash2, Edit2, Plus } from "lucide-react";
 
 import ReservationsCalendar from "@/components/reservationsSection/ReservationsCalendar";
-import CreateReservationModal, { OwnerReservation as ModalOwnerReservation } from "@/components/reservationsSection/CreateReservation";
+import CreateReservationModal from "@/components/reservationsSection/CreateReservation";
+import OwnerNotifications from "@/components/reservationsSection/OwnerNotifications";
 
 /** Types */
 type CourtForm = {
@@ -105,6 +106,7 @@ export default function OwnerComplexPage() {
   const [reservations, setReservations] = useState<any[]>([]);
   const [resLoading, setResLoading] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [notificationsRefreshKey, setNotificationsRefreshKey] = useState(0);
 
   // --- Fetch complex + courts ---
   useEffect(() => {
@@ -477,7 +479,7 @@ export default function OwnerComplexPage() {
   
       const uploadPromises = filesToUpload.map(async (file) => {
         try {
-          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\.-]/g, "");
+          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
           const filename = `${Date.now()}-${safeName}`;
           const path = `${complexId}/${filename}`;
   
@@ -641,7 +643,7 @@ export default function OwnerComplexPage() {
     } finally { setResLoading(false); }
   };
 
-  const handleCreatedReservation = (res: ModalOwnerReservation) => {
+  const handleCreatedReservation = (res: any) => {
     checkPendingReservation();
     setReservations(prev => [{ ...res }, ...prev]);
     toast({ title: "Reserva creada", description: "Se agregó la reserva al calendario." });
@@ -666,7 +668,7 @@ export default function OwnerComplexPage() {
             <div className="text-sm text-muted-foreground">{complex.address} · {complex.neighborhood}</div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => setIsCreateModalOpen(true)}><Calendar className="w-4 h-4 mr-2" />Nueva reserva</Button>
+            <Button onClick={() => setIsCreateModalOpen(true)}>Nueva reserva</Button>
             {!editing && <Button variant="outline" onClick={() => { setEditing(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit2 className="w-4 h-4 mr-2" />Editar</Button>}
             {editing && <Button variant="ghost" onClick={() => { setEditing(false); setForm(complex); }}>Cancelar</Button>}
             {editing && <Button onClick={saveComplex}>Guardar</Button>}
@@ -931,11 +933,13 @@ export default function OwnerComplexPage() {
               <CardContent>
                 <div className="flex flex-col gap-2">
                   <Button onClick={() => { setEditing(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit2 className="w-4 h-4 mr-2" />Editar Complejo</Button>
-                  <Button onClick={() => { setIsCreateModalOpen(true); setTimeout(loadReservations, 400); }}><Calendar className="w-4 h-4 mr-2" />Crear reserva</Button>
+                  <Button onClick={() => setIsCreateModalOpen(true)}>Registrar reserva manual</Button>
                   <Button variant="outline" onClick={async () => { await syncCourtsToDB(); }}>Guardar canchas</Button>
                 </div>
               </CardContent>
             </Card>
+
+            <OwnerNotifications refreshKey={notificationsRefreshKey} />
 
             {/* <Card>
                 <CardHeader>
@@ -969,9 +973,13 @@ export default function OwnerComplexPage() {
       <CreateReservationModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        authUserId={user?.id ?? ""}
-        onCreated={handleCreatedReservation}
+        complexId={complex.id}
+        onCreated={() => {
+          setNotificationsRefreshKey((value) => value + 1);
+          void loadReservations();
+        }}
       />
+
     </div>
   );
 }

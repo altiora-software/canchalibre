@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cancha Libre Frontend"
+  short_description: "Trabaja UI con contratos seguros"
+  default_prompt: "Use $canchalibre-frontend to implement a React task safely."
