@@ -122,7 +122,6 @@ export default function OwnerComplexPage() {
         .maybeSingle();
 
       if (error) {
-        console.error("fetch complex error:", error);
         toast({ title: "Error", description: "No se pudo cargar el complejo", variant: "destructive" });
         setComplex(null);
         setForm({});
@@ -227,7 +226,6 @@ export default function OwnerComplexPage() {
       (async () => {
         const { error } = await supabase.from("sport_courts").delete().eq("id", c.id);
         if (error) {
-          console.error("delete court error", error);
           toast({ title: "Error", description: "No se pudo eliminar cancha", variant: "destructive" });
           return;
         }
@@ -257,11 +255,6 @@ export default function OwnerComplexPage() {
         hourly_price: c.hourlyPrice,
         complex_id: complex.id,
       }));
-
-    //   for (const u of toUpdate) {
-    //     const { error } = await supabase.from("sport_courts").update(u).eq("id", u.id);
-    //     if (error) console.warn("update court error", error);
-    //   }
 
       // insert new (no id)
       const toInsert = courts.filter(c => !c.id).map(c => ({
@@ -307,8 +300,11 @@ export default function OwnerComplexPage() {
       }
       toast({ title: "Canchas sincronizadas", description: "Canchas guardadas correctamente" });
     } catch (err: any) {
-      console.error("sync courts error", err);
-      toast({ title: "Error", description: err?.message ?? String(err), variant: "destructive" });
+      toast({
+        title: "No se pudieron sincronizar las canchas",
+        description: "Verificá los datos e intentá nuevamente.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -359,7 +355,6 @@ export default function OwnerComplexPage() {
   
       toast({ title: "Foto subida", description: "Imagen agregada a la galería." });
     } catch (err: any) {
-      console.error(err);
       toast({ title: "Error", description: err?.message ?? String(err), variant: "destructive" });
     } finally {
       setUploading(false);
@@ -391,8 +386,6 @@ export default function OwnerComplexPage() {
   // --- Save complex (basic fields) ---
   
   const saveComplex = async () => {
-    console.log("entro a save");
-  
     if (!complex || !profile) return;
     if (complex.owner_id !== profile.id) {
       toast({ title: "No permitido", description: "No sos el propietario", variant: "destructive" });
@@ -435,7 +428,6 @@ export default function OwnerComplexPage() {
   
       // Insertar nuevas canchas (si hay)
       if (newCourts.length > 0) {
-        console.log("Insertando canchas nuevas:", newCourts);
         // Ensure sport is of the correct type
         const formattedNewCourts = newCourts.map(court => ({
           ...court,
@@ -443,32 +435,23 @@ export default function OwnerComplexPage() {
         }));
         const { error: courtsInsertError } = await supabase.from("sport_courts").insert(formattedNewCourts);
         if (courtsInsertError) {
-          console.error("Error insertando canchas:", courtsInsertError);
           throw courtsInsertError;
         }
       }
   
       // Actualizar canchas existentes (si las hay) — secuencial por RLS/claridad
       for (const c of existingCourts) {
-        try {
-          const { error: updErr } = await supabase.from("sport_courts").update({
-            name: c.name,
-            sport_complex: c.sport,
-            players_capacity: c.players_capacity,
-            surface_type: c.surface_type,
-            has_lighting: c.has_lighting,
-            has_roof: c.has_roof,
-            hourly_price: c.hourly_price,
-            complex_id: c.complex_id,
-          }).eq("id", c.id);
-          if (updErr) {
-            console.warn("No se pudo actualizar cancha id:", c.id, updErr);
-            // no tiramos excepción para intentar continuar con el resto,
-            // pero registramos el warning para debug.
-          }
-        } catch (err) {
-          console.warn("Excepción actualizando cancha", c.id, err);
-        }
+        const { error: updateError } = await supabase.from("sport_courts").update({
+          name: c.name,
+          sport: c.sport as "futbol" | "basquet" | "tenis" | "voley" | "handball" | "skate" | "padle",
+          players_capacity: c.players_capacity,
+          surface_type: c.surface_type,
+          has_lighting: c.has_lighting,
+          has_roof: c.has_roof,
+          hourly_price: c.hourly_price,
+          complex_id: c.complex_id,
+        }).eq("id", c.id);
+        if (updateError) throw updateError;
       }
   
       // --- 2) SUBIR/RESOLVER IMÁGENES ---
@@ -477,45 +460,28 @@ export default function OwnerComplexPage() {
         .map(p => (typeof p === "string" ? null : p as File))
         .filter(Boolean) as File[];
   
-      console.log("Files a subir:", filesToUpload);
-  
       const uploadPromises = filesToUpload.map(async (file) => {
-        try {
-          assertImageUpload(file, complexImageLimit);
-          const filename = `${Date.now()}-${crypto.randomUUID()}.${imageExtension(file)}`;
-          const path = `${complexId}/${filename}`;
-  
-          const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
-          if (upErr) {
-            console.error("upload error for", file.name, upErr);
-            throw upErr;
-          }
-  
-          const { data } = supabase.storage.from("complex-photos").getPublicUrl(path);
-          const publicUrl = data?.publicUrl;
-          if (!publicUrl) throw new Error("No publicUrl returned from storage.getPublicUrl()");
-          console.log("uploaded:", file.name, "->", publicUrl);
-          return publicUrl;
-        } catch (err) {
-          console.error("file upload failed:", file.name, err);
-          return null;
-        }
+        assertImageUpload(file, complexImageLimit);
+        const filename = `${Date.now()}-${crypto.randomUUID()}.${imageExtension(file)}`;
+        const path = `${complexId}/${filename}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("complex-photos")
+          .upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from("complex-photos").getPublicUrl(path);
+        const publicUrl = data?.publicUrl;
+        if (!publicUrl) throw new Error("No se pudo obtener la URL de la imagen");
+        return publicUrl;
       });
-  
-      const settled = await Promise.allSettled(uploadPromises);
-      const newlyUploaded = settled
-        .map(s => (s.status === "fulfilled" ? s.value : null))
-        .filter((v): v is string | null => true)
-        .filter(Boolean) as string[];
+
+      const newlyUploaded = await Promise.all(uploadPromises);
   
       // --- 3) CONSTRUIR finalPhotos ---
       // Conservamos las URLs existentes (strings) y agregamos las newlyUploaded
       const existingStrings = localPhotos.filter(p => typeof p === "string") as string[];
       const finalPhotos = [...existingStrings, ...newlyUploaded];
-  
-      console.log("existingStrings:", existingStrings);
-      console.log("newlyUploaded:", newlyUploaded);
-      console.log("finalPhotos:", finalPhotos);
   
       // --- 4) ACTUALIZAR sport_complexes (payload) ---
       const payload: Partial<ComplexShape> = {
@@ -523,8 +489,6 @@ export default function OwnerComplexPage() {
         photos: finalPhotos,
         // Si por RLS necesitás incluir owner_id, añadí: owner_id: complex.owner_id ?? profile.id
       };
-  
-      console.log("payload a enviar:", payload);
   
       const { data, error } = await supabase
         .from("sport_complexes")
@@ -534,17 +498,20 @@ export default function OwnerComplexPage() {
         .maybeSingle();
   
       if (error) {
-        console.error("update complex error:", error);
         // Mensaje específico para RLS si aparece
         const msg = error?.message ?? String(error);
         if (/row-level|polic/i.test(msg)) {
           toast({
             title: "Error de permisos",
-            description: "Política RLS impide la operación. Revisa owner_id y las policies.",
+            description: "No tenés permiso para modificar este complejo.",
             variant: "destructive",
           });
         } else {
-          toast({ title: "Error", description: msg, variant: "destructive" });
+          toast({
+            title: "No se pudieron guardar los cambios",
+            description: "Intentá nuevamente en unos instantes.",
+            variant: "destructive",
+          });
         }
         throw error;
       }
@@ -564,9 +531,7 @@ export default function OwnerComplexPage() {
           .select("*, sport_courts(*)")
           .eq("id", complexId)
           .maybeSingle();
-        if (refErr) {
-          console.warn("No se pudo refrescar complejo después de save:", refErr);
-        } else if (refreshed) {
+        if (!refErr && refreshed) {
           setComplex(refreshed);
           setForm(refreshed);
           const cts = (refreshed.sport_courts ?? []).map((c: any) => ({
@@ -581,15 +546,18 @@ export default function OwnerComplexPage() {
           }));
           setCourts(cts);
         }
-      } catch (err) {
-        console.warn("Error refrescando canchas:", err);
+      } catch {
+        // El guardado ya fue confirmado; la próxima carga recuperará el estado remoto.
       }
   
       setEditing(false);
       toast({ title: "Guardado", description: "Cambios guardados correctamente." });
     } catch (err: any) {
-      console.error("saveComplex general error:", err);
-      toast({ title: "Error", description: err?.message ?? String(err), variant: "destructive" });
+      toast({
+        title: "No se pudieron guardar los cambios",
+        description: "Verificá los datos e intentá nuevamente.",
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
       setLoading(false);
@@ -606,12 +574,7 @@ export default function OwnerComplexPage() {
           .eq("payment_status", "pending")
           .limit(1)
           .maybeSingle();
-      console.log('data', pendingCheck)
-      console.log('error', pendingErr)
-        if (pendingErr) {
-          console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
-          // opcional: permitir continuar y dejar que la DB haga la última validación
-        } else if (pendingCheck) {
+        if (!pendingErr && pendingCheck) {
           toast({
             title: "Reserva pendiente",
             description: "Ya tenés una reserva pendiente para este complejo. Cancelala o finalizala antes de crear otra.",
@@ -619,9 +582,8 @@ export default function OwnerComplexPage() {
           setLoading(false);
           return;
         }
-      } catch (err) {
-        console.error("Error comprobando pendientes (frontend):", err);
-        // opcional: seguir y dejar que DB bloquee si es necesario
+      } catch {
+        // La base valida esta condición nuevamente al crear una reserva.
       }
   }
 
@@ -635,12 +597,10 @@ export default function OwnerComplexPage() {
         owner_uuid: complex.owner_id  
       });
       if (error) {
-        console.error("RPC error", error);
         setReservations([]);
       } else setReservations(Array.isArray(data) ? data : []);
     // Corregido: asegurar que setReservations reciba un array
-    } catch (err) {
-      console.error(err);
+    } catch {
       setReservations([]);
     } finally { setResLoading(false); }
   };

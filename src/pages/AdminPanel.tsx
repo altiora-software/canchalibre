@@ -104,7 +104,6 @@ const AdminPanel = () => {
         setRevenue30d(sum30);
       } catch (e: any) {
         setDashError(e?.message ?? "Error cargando métricas");
-        console.error(e);
       } finally {
         if (!cancelled) setDashLoading(false);
       }

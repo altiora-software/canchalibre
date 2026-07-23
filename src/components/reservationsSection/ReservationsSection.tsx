@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 // @ts-ignore
 import {Badge} from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -27,6 +28,7 @@ interface OwnerReservation {
 
 export default function ReservationsSection({ reservations, setReservations, resLoading }) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const { toast } = useToast();
 
   // Filtrar reservas del día seleccionado
   const filteredReservations = selectedDate
@@ -48,8 +50,12 @@ export default function ReservationsSection({ reservations, setReservations, res
       setReservations((prev: OwnerReservation[]) =>
         prev.map((r) => (r.id === id ? { ...r, payment_status: newStatus } : r))
       );
-    } catch (err) {
-      console.error("Error actualizando reserva:", err);
+    } catch {
+      toast({
+        title: "No se pudo actualizar la reserva",
+        description: "Intentá nuevamente en unos instantes.",
+        variant: "destructive",
+      });
     }
   };
 

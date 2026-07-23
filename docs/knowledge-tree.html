@@ -156,6 +156,11 @@
       <p>Storage usa los buckets públicos <code>avatars</code> y <code>complex-photos</code>. RLS permite avatar sólo en la carpeta del usuario y fotos sólo de complejos propios o administración; tipo y tamaño se validan también en navegador.</p>
       <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-storage-image-contract.md">registro de cambio</a>. Requiere smoke test de Storage en staging.</p>
     </section>
+    <section id="client-session-log-safety">
+      <h2>17. Seguridad de registros del cliente (23/07/2026)</h2>
+      <p>El frontend no imprime sesiones, tokens de proveedor, reservas, archivos, URLs de Storage ni payloads en la consola. Los errores recuperables se muestran con mensajes genéricos para el usuario sin revelar detalles internos.</p>
+      <p>La edición de canchas persiste <code>sport</code> y aborta el guardado si una actualización o carga de imagen falla; no confirma cambios parciales como exitosos. Ver evidencia: <a href="knowledge/changes/2026-07-23-client-session-log-safety.md">registro de cambio</a>.</p>
+    </section>
   </main>
 </body>
 </html>

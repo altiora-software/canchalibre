@@ -113,7 +113,6 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
 
   const fetchOwnerComplexes = async (userId: string) => {
     if (!userId) {
-      console.warn("fetchOwnerComplexes: userId vacío, abortando.");
       return [];
     }
   
@@ -143,7 +142,6 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
       // también devolvemos los datos por si quien llama quiere usarlos
       return normalized;
     } catch (e: any) {
-      console.error("fetchOwnerComplexes error:", e);
       setError(e?.message ?? "Error fetching owner complexes");
       setComplexes([]);
       return [];

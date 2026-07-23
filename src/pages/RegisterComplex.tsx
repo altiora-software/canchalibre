@@ -144,8 +144,7 @@ const RegisterComplex = () => {
       const results = await getGeocode({ address });
       const { lat, lng } = await getLatLng(results[0]);
       setFormData({ ...formData, address, latitude: lat, longitude: lng });
-    } catch (err) {
-      console.error("Error geocoding:", err);
+    } catch {
       toast({ title: "Error", description: "No se pudo obtener la ubicación exacta.", variant: "destructive" });
     }
   };

@@ -83,7 +83,6 @@ const MyReservations = () => {
     const map = new Map<string, { complexName: string; address?: string; phone?: string; whatsapp?: string; rows: Row[] }>();
 
     (reservations as Row[]).forEach((r) => {
-      console.log('res', r);
 
       const key = r.sport_complexes?.name || "Complejo";
       const entry = map.get(key) ?? {
