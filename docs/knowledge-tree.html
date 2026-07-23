@@ -141,6 +141,21 @@
       <p>Los tokens de color ahora usan superficies opacas y pares de texto contrastados en claro y oscuro. Los estados semánticos conservan legibilidad incluso cuando una pantalla usa colores fijos de Tailwind.</p>
       <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-accessible-contrast-system.md">registro de cambio</a>.</p>
     </section>
+    <section id="test-user-seed">
+      <h2>14. Seed controlado de cuentas de prueba (23/07/2026)</h2>
+      <p><code>npm run seed:test-users</code> usa service role local y una confirmación explícita para crear/actualizar admin, owner y customer de prueba. Incluye un complejo/cancha aprobados con disponibilidad, pero no crea reservas.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-test-user-seed.md">registro de cambio</a>. Nunca ejecutar en producción sin aprobación explícita.</p>
+    </section>
+    <section id="public-catalog-contract">
+      <h2>15. Contrato del catálogo público (23/07/2026)</h2>
+      <p>El catálogo consulta <code>sport_complexes</code> con columnas explícitas no sensibles y delega visibilidad a RLS; no requiere una vista no versionada ni expone datos de contacto.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-public-catalog-contract-alignment.md">registro de cambio</a>.</p>
+    </section>
+    <section id="storage-image-contract">
+      <h2>16. Imágenes de perfil y complejos (23/07/2026)</h2>
+      <p>Storage usa los buckets públicos <code>avatars</code> y <code>complex-photos</code>. RLS permite avatar sólo en la carpeta del usuario y fotos sólo de complejos propios o administración; tipo y tamaño se validan también en navegador.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-storage-image-contract.md">registro de cambio</a>. Requiere smoke test de Storage en staging.</p>
+    </section>
   </main>
 </body>
 </html>

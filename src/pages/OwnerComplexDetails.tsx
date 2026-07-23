@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useToast } from "@/hooks/use-toast";
+import { assertImageUpload, complexImageLimit, imageExtension } from "@/lib/image-upload";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
@@ -325,12 +326,13 @@ export default function OwnerComplexPage() {
   
     try {
       // Generar nombre único
-      const ext = file.name.split(".").pop();
-      const filename = `${Date.now()}.${ext}`;
+      assertImageUpload(file, complexImageLimit);
+      const ext = imageExtension(file);
+      const filename = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
       const path = `${complex.id}/${filename}`;
   
       // Subir a Storage
-      const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: true });
+      const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
 
       if (upErr) throw upErr;
   
@@ -479,11 +481,11 @@ export default function OwnerComplexPage() {
   
       const uploadPromises = filesToUpload.map(async (file) => {
         try {
-          const safeName = file.name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.-]/g, "");
-          const filename = `${Date.now()}-${safeName}`;
+          assertImageUpload(file, complexImageLimit);
+          const filename = `${Date.now()}-${crypto.randomUUID()}.${imageExtension(file)}`;
           const path = `${complexId}/${filename}`;
   
-          const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: true });
+          const { error: upErr } = await supabase.storage.from("complex-photos").upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
           if (upErr) {
             console.error("upload error for", file.name, upErr);
             throw upErr;

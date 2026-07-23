@@ -69,11 +69,24 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
       setLoading(true);
       setError(null);
   
-      // Usamos la vista pública con solo campos no-sensibles
+      // La tabla aplica RLS para complejos activos/aprobados. Pedimos una
+      // lista explícita para no enviar teléfonos, WhatsApp ni email al catálogo.
       const { data, error } = await supabase
-        .from('sport_complexes_public')   // <-- vista en DB
+        .from('sport_complexes')
         .select(`
-          *,
+          id,
+          name,
+          description,
+          address,
+          neighborhood,
+          latitude,
+          longitude,
+          photos,
+          amenities,
+          opening_hours,
+          is_active,
+          is_approved,
+          payment_status,
           sport_courts: sport_courts (
             id,
             name,

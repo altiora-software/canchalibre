@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { assertImageUpload, avatarImageLimit, imageExtension } from "@/lib/image-upload";
 
 export type UserProfile = {
   user_id: string;
@@ -63,12 +64,13 @@ export const useUserProfile = () => {
   const uploadAvatar = useCallback(
     async (file: File) => {
       if (!user) throw new Error("No autenticado");
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${user.id}/${Date.now()}.${ext}`;
+      assertImageUpload(file, avatarImageLimit);
+      const ext = imageExtension(file);
+      const path = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
   
       const { error: upErr } = await supabase.storage
         .from("avatars")
-        .upload(path, file, { upsert: true });
+        .upload(path, file, { upsert: false, contentType: file.type, cacheControl: "3600" });
   
       if (upErr) throw upErr;
   

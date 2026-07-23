@@ -11,6 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "seed:test-users": "node scripts/test/create-test-users.mjs",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "preview": "vite preview"
