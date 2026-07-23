@@ -140,3 +140,29 @@ All colors MUST be HSL.
   .dark .text-yellow-600, .dark .text-yellow-700 { color: hsl(45 95% 72%); }
   .dark .text-red-600, .dark .text-red-700 { color: hsl(0 85% 73%); }
 }
+
+/* CTA de captación: la ilustración conserva espacio de lectura a la izquierda
+   y se integra con la tarjeta verde del diseño público. */
+main > section:last-of-type > div:last-child.rounded-2xl.bg-emerald-50 {
+  min-height: 252px;
+  background-image: url("/owner-complex-isometric-court.png");
+  background-position: right -1.5rem center;
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+}
+
+@media (max-width: 1023px) {
+  main > section:last-of-type > div:last-child.rounded-2xl.bg-emerald-50 {
+    min-height: 270px;
+    background-position: right -3rem bottom;
+    background-size: auto 88%;
+  }
+}
+
+@media (max-width: 639px) {
+  main > section:last-of-type > div:last-child.rounded-2xl.bg-emerald-50 {
+    min-height: 320px;
+    background-position: right -6rem bottom -1rem;
+    background-size: auto 66%;
+  }
+}
