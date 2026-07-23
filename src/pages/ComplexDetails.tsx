@@ -7,7 +7,6 @@ import { Separator } from "@/components/ui/separator";
 import { 
   MapPin, 
   Clock, 
-  Star, 
   Phone, 
   MessageCircle, 
   Calendar,
@@ -108,8 +107,6 @@ const ComplexDetails = () => {
   const images = complex.photos && complex.photos.length > 0 ? complex.photos : ["/placeholder.svg"];
   const sports = complex.courts?.map(court => court.sport) || [];
   const uniqueSports = [...new Set(sports)];
-  const rating = 4.5; // Placeholder
-  const reviewCount = 12; // Placeholder
 
   return (
     <div className="min-h-screen bg-background">
@@ -183,17 +180,10 @@ const ComplexDetails = () => {
                       <MapPin className="w-4 h-4" />
                       <span>{complex.neighborhood}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                      <span>{rating}</span>
-                      <span>({reviewCount} reseñas)</span>
-                    </div>
                   </div>
                 </div>
-                <Badge variant={complex.is_active ? "default" : "secondary"} className={
-                  complex.is_active ? "bg-green-500 text-white" : "bg-red-500 text-white"
-                }>
-                  {complex.is_active ? "Abierto" : "Cerrado"}
+                <Badge variant={complex.is_active ? "default" : "secondary"}>
+                  {complex.is_active ? "Reservas disponibles" : "No disponible"}
                 </Badge>
               </div>
 
@@ -234,7 +224,7 @@ const ComplexDetails = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           {court.has_lighting ? (
-                            <Zap className="w-4 h-4 text-yellow-500" />
+                            <Zap className="w-4 h-4 text-amber-700" />
                           ) : (
                             <Zap className="w-4 h-4 text-muted-foreground" />
                           )}
@@ -242,14 +232,14 @@ const ComplexDetails = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           {court.has_roof ? (
-                            <Home className="w-4 h-4 text-blue-500" />
+                            <Home className="w-4 h-4 text-secondary" />
                           ) : (
                             <Home className="w-4 h-4 text-muted-foreground" />
                           )}
                           <span>{court.has_roof ? "Techada" : "Al aire libre"}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">${court.hourly_price || 2000}/hora</span>
+                          <span className="font-medium">{court.hourly_price ? `$${court.hourly_price}/hora` : "Precio a confirmar"}</span>
                         </div>
                       </div>
                       {court.surface_type && (

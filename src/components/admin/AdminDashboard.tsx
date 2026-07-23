@@ -150,40 +150,40 @@ const AdminDashboard = () => {
 
       {/* Subscription Status Cards */}
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className="border-emerald-800 bg-emerald-950 text-emerald-50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Suscripciones Activas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-emerald-200" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-700">{stats.activeSubscriptions}</div>
-            <p className="text-xs text-green-600">
+            <div className="text-2xl font-bold text-white">{stats.activeSubscriptions}</div>
+            <p className="text-xs text-emerald-100">
               Complejos con suscripción pagada activa
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-blue-200 bg-blue-50/50">
+        <Card className="border-blue-800 bg-blue-950 text-blue-50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Períodos de Prueba</CardTitle>
-            <Clock className="h-4 w-4 text-blue-600" />
+            <Clock className="h-4 w-4 text-blue-200" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-700">{stats.trialSubscriptions}</div>
-            <p className="text-xs text-blue-600">
+            <div className="text-2xl font-bold text-white">{stats.trialSubscriptions}</div>
+            <p className="text-xs text-blue-100">
               Complejos en período de prueba (15 días)
             </p>
           </CardContent>
         </Card>
 
-        <Card className="border-red-200 bg-red-50/50">
+        <Card className="border-red-800 bg-red-950 text-red-50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Suscripciones Vencidas</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTriangle className="h-4 w-4 text-red-200" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-700">{stats.expiredSubscriptions}</div>
-            <p className="text-xs text-red-600">
+            <div className="text-2xl font-bold text-white">{stats.expiredSubscriptions}</div>
+            <p className="text-xs text-red-100">
               Requieren renovación o reactivación
             </p>
           </CardContent>

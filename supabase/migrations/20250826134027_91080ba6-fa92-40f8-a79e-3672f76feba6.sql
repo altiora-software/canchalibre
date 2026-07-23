@@ -27,4 +27,4 @@ BEGIN
     role = COALESCE(EXCLUDED.role, profiles.role);
   RETURN NEW;
 END;
-$function$
+$function$;

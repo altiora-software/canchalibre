@@ -8,8 +8,8 @@ export interface CourtData {
   sport: string;
   players_capacity: number;
   surface_type?: string | null;
-  has_lighting: boolean;
-  has_roof: boolean;
+  has_lighting: boolean | null;
+  has_roof: boolean | null;
   hourly_price?: number | null;
 }
 
@@ -24,7 +24,7 @@ export interface SportComplexData {
   website?: string | null;
   photos: string[];
   amenities: string[];
-  opening_hours?: any;
+  opening_hours?: unknown;
   is_active: boolean;
   is_approved: boolean;
   payment_status: string;
@@ -55,7 +55,7 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
     opening_hours: row.opening_hours,
     is_active: row.is_active,
     is_approved: row.is_approved,
-    payment_status: row.is_approved,
+    payment_status: row.payment_status ?? "unknown",
 
     // asegura number | null
     latitude: typeof row.latitude === 'number' ? row.latitude : (row.latitude ? Number(row.latitude) : null),
@@ -81,6 +81,8 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
             players_capacity,
             surface_type,
             hourly_price,
+            has_lighting,
+            has_roof,
             is_active
           )
         `);

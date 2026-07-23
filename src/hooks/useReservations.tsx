@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ReservationData {
@@ -20,14 +20,15 @@ export interface ReservationData {
   updated_at: string;
 }
 
-export interface TimeSlot {
-  id: string;
-  court_id: string;
-  day_of_week: number;
+export interface BookableSlot {
   start_time: string;
   end_time: string;
-  is_available: boolean;
 }
+
+type CreateReservationInput = Pick<
+  ReservationData,
+  'court_id' | 'reservation_date' | 'start_time' | 'end_time' | 'payment_method' | 'notes'
+>;
 
 export const useReservations = () => {
   const [reservations, setReservations] = useState<ReservationData[]>([]);
@@ -37,109 +38,36 @@ export const useReservations = () => {
   const fetchUserReservations = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      setError(null);
+      const { data, error: queryError } = await supabase
         .from('reservations')
-        .select(`
-          *,
-          sport_complexes (name, address),
-          sport_courts (name, sport)
-        `)
+        .select('*')
         .order('reservation_date', { ascending: true });
 
-      if (error) throw error;
-      
-      // Transform data to match our interface
-      const formattedReservations = data?.map((reservation: any) => ({
-        id: reservation.id,
-        user_id: reservation.user_id,
-        complex_id: reservation.complex_id,
-        court_id: reservation.court_id,
-        reservation_date: reservation.reservation_date,
-        start_time: reservation.start_time,
-        end_time: reservation.end_time,
-        total_price: reservation.total_price,
-        payment_method: reservation.payment_method as 'mercado_pago' | 'transfer' | 'cash',
-        payment_status: reservation.payment_status as 'pending' | 'confirmed' | 'paid' | 'cancelled',
-        deposit_amount: reservation.deposit_amount || 0,
-        deposit_paid: reservation.deposit_paid || false,
-        mercadopago_payment_id: reservation.mercadopago_payment_id,
-        notes: reservation.notes,
-        created_at: reservation.created_at,
-        updated_at: reservation.updated_at,
-      })) || [];
-      
-      setReservations(formattedReservations);
+      if (queryError) throw queryError;
+      setReservations((data ?? []) as ReservationData[]);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message ?? 'No se pudieron cargar las reservas.');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchAvailableSlots = async (courtId: string, date: string) => {
-    try {
-      const dayOfWeek = new Date(date).getDay();
-      const { data, error } = await supabase
-        .from('court_availability')
-        .select('*')
-        .eq('court_id', courtId)
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_available', true);
+  // This RPC is intentionally the only client-side availability read. It exposes
+  // bookable slots, not another customer's reservations or their personal data.
+  const fetchBookableSlots = useCallback(async (courtId: string, date: string): Promise<BookableSlot[]> => {
+    const { data, error: rpcError } = await supabase.rpc('get_bookable_slots' as never, {
+      p_court_id: courtId,
+      p_reservation_date: date,
+    } as never);
 
-      if (error) throw error;
-      return data || [];
-    } catch (err: any) {
-      console.error('Error fetching available slots:', err);
-      return [];
-    }
-  };
-
-  // useReservations.ts
-  const checkSlotAvailability = async (
-    courtId: string,
-    date: string,        // "YYYY-MM-DD"
-    start: string,       // "HH:MM" o "HH:MM:SS"
-    end: string
-  ): Promise<boolean | null> => {
-    // normalizamos a HH:MM:SS para comparar
-    const s = start.length === 5 ? `${start}:00` : start;
-    const e = end.length === 5 ? `${end}:00` : end;
-
-    // Overlap correcto (final exclusivo):
-    // existing.start < newEnd  &&  existing.end > newStart
-    const { count, error } = await supabase
-      .from("reservations")
-      .select("id", { count: "exact", head: true }) // más liviano: HEAD + count
-      .eq("court_id", courtId)
-      .eq("reservation_date", date)
-      .lt("start_time", e) // existing.start < newEnd
-      .gt("end_time", s);  // existing.end   > newStart
-
-    if (error) {
-      console.debug("checkSlotAvailability warn:", error);
-      // No bloquees si falla la verificación, deja continuar
-      return null;
-    }
-
-  // count viene en data?.length cuando no usamos head:true;
-  // con head:true, supabase coloca el total en headers -> pero el SDK
-  // igual retorna data=null; usamos error==null => disponible
-  // más simple: repitamos la select sin head:
-    return (count ?? 0) === 0;
-  };
-
-  type CreateReservationInput = {
-    court_id: string;
-    reservation_date: string;
-    start_time: string;
-    end_time: string;
-    payment_method: ReservationData['payment_method'];
-    notes?: string;
-  };
+    if (rpcError) throw new Error(rpcError.message);
+    return (data as unknown as BookableSlot[] | null) ?? [];
+  }, []);
 
   const createReservation = async (reservationData: CreateReservationInput) => {
     try {
-      const { data, error } = await supabase.rpc('create_reservation' as never, {
+      const { data, error: rpcError } = await supabase.rpc('create_reservation' as never, {
         p_court_id: reservationData.court_id,
         p_reservation_date: reservationData.reservation_date,
         p_start_time: reservationData.start_time,
@@ -148,38 +76,36 @@ export const useReservations = () => {
         p_notes: reservationData.notes ?? null,
       } as never);
 
-      if (error) throw error;
+      if (rpcError) throw rpcError;
       const reservation = data as unknown as ReservationData | null;
       if (!reservation) throw new Error('La reserva no devolvió un resultado.');
-      return { data: reservation as ReservationData, error: null };
+      return { data: reservation, error: null as string | null };
     } catch (err: any) {
-      return { data: null, error: err.message };
+      return { data: null, error: err.message ?? 'No se pudo crear la reserva.' };
     }
   };
 
   const updateReservationStatus = async (reservationId: string, status: string, paymentId?: string) => {
     try {
-      const updateData: any = { payment_status: status };
-      if (paymentId) {
-        updateData.mercadopago_payment_id = paymentId;
-      }
+      const updateData: { payment_status: string; mercadopago_payment_id?: string } = { payment_status: status };
+      if (paymentId) updateData.mercadopago_payment_id = paymentId;
 
-      const { data, error } = await supabase
+      const { data, error: updateError } = await supabase
         .from('reservations')
         .update(updateData)
         .eq('id', reservationId)
         .select()
         .single();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
       return { data, error: null };
     } catch (err: any) {
-      return { data: null, error: err.message };
+      return { data: null, error: err.message ?? 'No se pudo actualizar la reserva.' };
     }
   };
 
   useEffect(() => {
-    fetchUserReservations();
+    void fetchUserReservations();
   }, []);
 
   return {
@@ -187,10 +113,9 @@ export const useReservations = () => {
     loading,
     error,
     fetchUserReservations,
-    fetchAvailableSlots,
-    checkSlotAvailability,
+    fetchBookableSlots,
     createReservation,
     updateReservationStatus,
-    refetch: fetchUserReservations
+    refetch: fetchUserReservations,
   };
 };

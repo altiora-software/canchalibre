@@ -4,12 +4,13 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building2, CreditCard, Bell, BarChart3, LogOut } from "lucide-react";
+import { ArrowLeft, Building2, CreditCard, Bell, BarChart3, LogOut, ClipboardCheck } from "lucide-react";
 import { useSuperAdmin } from "@/hooks/useSuperAdmin";
 import AdminComplexApproval from "@/components/admin/AdminComplexApproval";
 import AdminSubscriptions from "@/components/admin/AdminSubscriptions";
 import AdminNotifications from "@/components/admin/AdminNotifications";
 import AdminDashboard from "@/components/admin/AdminDashboard";
+import OwnerApplicationReview from "@/components/admin/OwnerApplicationReview";
 import { supabase } from "@/integrations/supabase/client"; // <- usa tu cliente existente
 
 const formatCurrencyARS = (n: number) =>
@@ -175,7 +176,7 @@ const AdminPanel = () => {
 
         {/* Main Content */}
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2">
               <BarChart3 className="w-4 h-4" />
               <span>Dashboard</span>
@@ -183,6 +184,10 @@ const AdminPanel = () => {
             <TabsTrigger value="complexes" className="flex items-center space-x-2">
               <Building2 className="w-4 h-4" />
               <span>Complejos</span>
+            </TabsTrigger>
+            <TabsTrigger value="owner-applications" className="flex items-center space-x-2">
+              <ClipboardCheck className="w-4 h-4" />
+              <span>Solicitudes</span>
             </TabsTrigger>
             <TabsTrigger value="subscriptions" className="flex items-center space-x-2">
               <CreditCard className="w-4 h-4" />
@@ -291,6 +296,21 @@ const AdminPanel = () => {
               <CardContent>
                 <AdminComplexApproval />
               </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="owner-applications" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <ClipboardCheck className="w-5 h-5" />
+                  <span>Solicitudes de propietarios</span>
+                </CardTitle>
+                <CardDescription>
+                  Validá primero a la persona responsable. Aprobar una solicitud no publica el complejo ni habilita reservas.
+                </CardDescription>
+              </CardHeader>
+              <CardContent><OwnerApplicationReview /></CardContent>
             </Card>
           </TabsContent>
 

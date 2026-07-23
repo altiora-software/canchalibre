@@ -668,10 +668,10 @@ export default function OwnerComplexPage() {
             <div className="text-sm text-muted-foreground">{complex.address} · {complex.neighborhood}</div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => setIsCreateModalOpen(true)}>Nueva reserva</Button>
+            <Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={() => setIsCreateModalOpen(true)}>Nueva reserva</Button>
             {!editing && <Button variant="outline" onClick={() => { setEditing(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit2 className="w-4 h-4 mr-2" />Editar</Button>}
             {editing && <Button variant="ghost" onClick={() => { setEditing(false); setForm(complex); }}>Cancelar</Button>}
-            {editing && <Button onClick={saveComplex}>Guardar</Button>}
+            {editing && <Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={saveComplex}>Guardar</Button>}
           </div>
         </div>
 
@@ -690,7 +690,7 @@ export default function OwnerComplexPage() {
                             <img src={src} alt={`photo-${idx}`} className="w-56 h-40 object-cover rounded-md" />
                             {complex.owner_id === profile!.id && (
                             <button
-                                className="absolute top-2 right-2 bg-white/90 rounded p-1"
+                                className="absolute top-2 right-2 rounded bg-background/95 p-1 text-destructive shadow-sm ring-1 ring-border hover:bg-destructive hover:text-destructive-foreground"
                                 onClick={() => handleRemovePhoto(idx)}
                             >
                                 <Trash2 className="w-4 h-4" />
@@ -750,7 +750,7 @@ export default function OwnerComplexPage() {
               <CardContent>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {(form.amenities ?? complex.amenities ?? []).map((a, i) => (
-                    <Badge key={i} className="flex items-center gap-2">
+                    <Badge key={i} className="flex items-center gap-2 border-emerald-800 bg-emerald-800 text-white dark:border-emerald-700 dark:bg-emerald-700">
                       {a}
                       {editing && <button className="ml-2 text-xs" onClick={() => setForm(prev => ({ ...(prev ?? {}), amenities: (prev?.amenities ?? complex.amenities ?? []).filter((_, idx) => idx !== i) }))}>x</button>}
                     </Badge>
@@ -758,8 +758,8 @@ export default function OwnerComplexPage() {
                 </div>
                 {editing && (
                   <div className="flex gap-2">
-                    <input id="newAmenity" className="border rounded px-2 py-1 flex-1" placeholder="Agregar servicio" />
-                    <Button onClick={() => {
+                    <input id="newAmenity" className="flex-1 rounded border border-input bg-background px-2 py-1 text-foreground" placeholder="Agregar servicio" />
+                    <Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={() => {
                       const el = document.getElementById("newAmenity") as HTMLInputElement | null;
                       const v = el?.value ?? "";
                       if (!v.trim()) return;
@@ -871,7 +871,7 @@ export default function OwnerComplexPage() {
                     </div>
                   </div>
 
-                  <Button type="button" onClick={addCourt} className="w-full md:w-auto">
+                  <Button type="button" onClick={addCourt} className="w-full bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600 md:w-auto">
                     <Plus className="w-4 h-4 mr-2" />
                     Agregar Cancha
                   </Button>
@@ -886,7 +886,7 @@ export default function OwnerComplexPage() {
                         <div className="flex-1">
                           <h5 className="font-medium">{court.name}</h5>
                           <div className="flex flex-wrap gap-2 mt-1">
-                            <Badge variant="secondary">
+                            <Badge variant="secondary" className="border-blue-800 bg-blue-800 text-white dark:border-blue-700 dark:bg-blue-700">
                               {sportsOptions.find(s => s.value === court.sport)?.label}
                             </Badge>
                             <Badge variant="outline">
@@ -932,8 +932,8 @@ export default function OwnerComplexPage() {
               <CardHeader><CardTitle>Acciones</CardTitle></CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-2">
-                  <Button onClick={() => { setEditing(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit2 className="w-4 h-4 mr-2" />Editar Complejo</Button>
-                  <Button onClick={() => setIsCreateModalOpen(true)}>Registrar reserva manual</Button>
+                  <Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={() => { setEditing(true); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit2 className="w-4 h-4 mr-2" />Editar Complejo</Button>
+                  <Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={() => setIsCreateModalOpen(true)}>Registrar reserva manual</Button>
                   <Button variant="outline" onClick={async () => { await syncCourtsToDB(); }}>Guardar canchas</Button>
                 </div>
               </CardContent>

@@ -14,7 +14,7 @@ const PrivacyPolicy = () => {
         <meta name="description" content="Política de privacidad de Cancha Libre - Cómo protegemos y utilizamos tus datos personales." />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-12 px-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-12 px-4 text-foreground">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
             <Button 
@@ -27,17 +27,17 @@ const PrivacyPolicy = () => {
             </Button>
           </div>
 
-          <Card className="shadow-card-custom border-0">
+          <Card className="border-border/80 shadow-card-custom">
             <CardHeader>
               <CardTitle className="text-3xl text-center text-foreground">
                 Política de Privacidad
               </CardTitle>
-              <p className="text-center text-muted-foreground">
+              <p className="text-center text-foreground/70">
                 Última actualización: {new Date().toLocaleDateString('es-AR')}
               </p>
             </CardHeader>
-            <CardContent className="prose prose-slate max-w-none">
-              <div className="space-y-6 text-foreground">
+            <CardContent className="prose max-w-none prose-headings:text-foreground prose-p:text-foreground/80 prose-li:text-foreground/80">
+              <div className="space-y-6">
                 <section>
                   <h2 className="text-xl font-semibold mb-3">1. Información que Recopilamos</h2>
                   <p>

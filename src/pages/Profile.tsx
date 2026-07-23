@@ -176,12 +176,12 @@ const Profile = () => {
         <meta name="description" content="Configura tus datos y preferencias" />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-8">
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-8 text-foreground">
         <div className="container mx-auto px-4 max-w-3xl">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold">Mi Perfil</h1>
-              <p className="text-sm text-muted-foreground">Edita tus datos y preferencias</p>
+              <p className="text-sm text-foreground/70">Edita tus datos y preferencias</p>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" asChild>
@@ -192,7 +192,7 @@ const Profile = () => {
             </div>
           </div>
 
-          <Card className="mb-6">
+          <Card className="mb-6 border-border/80">
             <CardHeader>
               <CardTitle>Datos personales</CardTitle>
             </CardHeader>
@@ -205,7 +205,7 @@ const Profile = () => {
                   ) : draft.avatar_url ? (
                     <img src={draft.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full grid place-items-center text-muted-foreground">
+                    <div className="w-full h-full grid place-items-center text-foreground/60">
                       {/* <AvatarFallback className="bg-transparent text-muted-foreground">
                         <User className="w-7 h-7" />
                       </AvatarFallback> */}
@@ -251,7 +251,7 @@ const Profile = () => {
                     )}
                   </div>
 
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-foreground/70">
                     Tip: PNG/JPEG hasta 5MB. Si no querés subir ahora, podés seleccionar la imagen y se guardará al presionar
                     "Guardar cambios".
                   </p>
@@ -326,7 +326,7 @@ const Profile = () => {
                       <Badge
                         key={s}
                         className={`cursor-pointer select-none px-3 py-1 rounded-full text-sm ${
-                          active ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+                          active ? "bg-primary text-primary-foreground" : "border border-border bg-muted text-foreground"
                         }`}
                         onClick={() => onSelectSport(s)}
                         aria-pressed={active}
@@ -344,7 +344,7 @@ const Profile = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Notificaciones por Email</p>
-                    <p className="text-sm text-muted-foreground">Confirmaciones y recordatorios</p>
+                    <p className="text-sm text-foreground/70">Confirmaciones y recordatorios</p>
                   </div>
                   <Switch
                     checked={!!draft.notify_email}

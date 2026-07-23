@@ -9,6 +9,7 @@ import { SuperAdminProvider } from "@/hooks/useSuperAdmin";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import OwnersAuth from "./pages/OwnersAuth";
+import OwnerApplication from "./pages/OwnerApplication";
 import SuperAdminLogin from "./pages/SuperAdminLogin";
 import RegisterComplex from "./pages/RegisterComplex";
 import ComplexDetails from "./pages/ComplexDetails";
@@ -36,6 +37,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/owners/auth" element={<OwnersAuth />} />
+              <Route path="/owners/apply" element={<OwnerApplication />} />
               <Route path="/register-complex" element={<RegisterComplex />} />
               <Route path="/complex/:id" element={<ComplexDetails />} />
               <Route path="/owner-complex/:id" element={<OwnerComplexDetails />} />

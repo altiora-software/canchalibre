@@ -54,7 +54,7 @@
       <h3>Descubrimiento y reserva</h3>
       <p>Catálogo → detalle de complejo/cancha → selección de fecha/hora → inserción de <code>reservations</code> con estado pendiente → generación de enlace/mensaje de WhatsApp. Mercado Pago no está integrado como cobro verificable: hoy es una coordinación manual.</p>
       <h3>Alta de propietario</h3>
-      <p>Login/registro → selección de rol → datos del propietario y complejo → Edge Function <code>owner-onboarding</code> → RPC <code>promote_to_owner</code> → complejo inicialmente no aprobado y prueba de 15 días.</p>
+      <p>Solicitud pública de negocio → revisión comercial administrativa → invitación server-side → activación de rol <code>owner</code> sólo tras validar email aprobado → complejo en borrador → revisión independiente de publicación. El endpoint histórico <code>owner-onboarding</code> está retirado; ningún navegador puede promover perfiles.</p>
       <h3>Administración</h3>
       <p>Login de administrador → métricas vía RPC → aprobación/rechazo de complejos, estado de suscripciones y envío de avisos. La interfaz contiene controles de rol, pero éstos no reemplazan los controles de base de datos.</p>
       <div class="note"><strong>Regla de diseño para futuras tareas:</strong> toda mutación sensible (roles, aprobación, precios, pago y reserva) debe quedar validada de forma transaccional en el servidor/base; el front sólo ofrece experiencia de usuario.</div>
@@ -112,10 +112,34 @@
       <p>Los RPC <code>approve_complex</code> y <code>reject_complex</code> validan el rol administrativo, sus argumentos y los estados de suscripcion. Un propietario o cliente no puede adquirir permisos de admin ni ejecutar estas acciones.</p>
       <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-admin-authorization-contract.md">registro de cambio</a>. Requiere prueba de actor autorizado y denegado en staging antes de produccion.</p>
     </section>
+    <section id="owner-application-approval">
+      <h2>Solicitud y habilitación de propietarios</h2>
+      <p>La ruta <code>/owners/apply</code> solicita los datos mínimos de contacto y negocio sin crear cuenta. <code>owner_applications</code> es privada y sólo administración la revisa.</p>
+      <p>La única promoción ocurre en <code>activate_owner_application</code>, ejecutada por la función server-side después de aprobación e invitación. Catálogo, mapa, canchas y reservas requieren además <code>is_approved=true</code> e <code>is_active=true</code>.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-owner-application-approval.md">registro de cambio</a>. Requiere pruebas de RLS e invitación en staging antes de producción.</p>
+    </section>
+
     <section id="owner-manual-reservations">
       <h2>10. Reservas y notificaciones del propietario (23/07/2026)</h2>
       <p>El propietario puede registrar una reserva manual de telefono/presencial mediante <code>create_owner_reservation</code>. La base verifica que la cancha sea propia, calcula precio y seña, y rechaza solapes.</p>
       <p>Las reservas creadas por clientes siguen usando <code>create_reservation</code>. Ambos origenes generan una notificacion interna para el propietario, visible solo en su panel.</p>
+    </section>
+    <section id="fresh-database-audit">
+      <h2>11. Bootstrap de base de datos (23/07/2026)</h2>
+      <p>La cadena de migraciones fue reconciliada para una base vacia: se eliminaron fixtures invalidos, se corrigieron dependencias de triggers y se versionaron campos/RPC consumidos por la aplicacion.</p>
+      <p>El reset local sigue pendiente de evidencia porque Docker Desktop no esta disponible. Es obligatorio ejecutar <code>supabase db reset --local</code> o un reset equivalente en staging antes de produccion.</p>
+    </section>
+    <section id="radar-turnos-ui">
+      <h2>12. Radar de turnos y reserva guiada (23/07/2026)</h2>
+      <p>El catálogo público organiza la búsqueda por deporte, zona, fecha y hora preferida en una URL compartible; muestra sólo atributos verificables del complejo y ofrece mapa con fallback por barrios.</p>
+      <p>La reserva consume <code>get_bookable_slots(court_id, date)</code>, que entrega bloques sin exponer reservas de terceros. La confirmación sigue pasando exclusivamente por <code>create_reservation</code>, que recalcula importe y rechaza solapes.</p>
+      <p>La portada usa una hero propia, lista/mapa responsive y bloques de explicación y captación. Google Maps usa <code>VITE_GOOGLE_MAPS_API_KEY</code> restringida por origen y sólo dibuja coordenadas públicas reales; sin configuración muestra un fallback por barrios.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-radar-turnos-ui-ux.md">registro de cambio</a>. La migración requiere pruebas de RLS y concurrencia en staging.</p>
+    </section>
+    <section id="accessible-contrast-system">
+      <h2>13. Sistema de contraste accesible (23/07/2026)</h2>
+      <p>Los tokens de color ahora usan superficies opacas y pares de texto contrastados en claro y oscuro. Los estados semánticos conservan legibilidad incluso cuando una pantalla usa colores fijos de Tailwind.</p>
+      <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-accessible-contrast-system.md">registro de cambio</a>.</p>
     </section>
   </main>
 </body>

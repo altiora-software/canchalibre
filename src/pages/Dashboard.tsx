@@ -1,463 +1,90 @@
-  import { useEffect, useMemo, useState } from "react";
-  import { Helmet } from "react-helmet-async";
-  import { Link, useNavigate } from "react-router-dom";
-  import { useAuth } from "@/hooks/useAuth";
-  import { useProfile } from "@/hooks/useProfile";
-  import { useComplexes } from "@/hooks/useComplexes";
-  import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Helmet } from "react-helmet-async";
+import { Link, useNavigate } from "react-router-dom";
+import { CalendarDays, CheckCircle2, Clock3, LogOut, MapPin, Plus, ReceiptText, Settings2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useComplexes } from "@/hooks/useComplexes";
+import { useProfile } from "@/hooks/useProfile";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import CreateReservationModal from "@/components/reservationsSection/CreateReservation";
+import OwnerNotifications from "@/components/reservationsSection/OwnerNotifications";
+import ReservationsCalendar from "@/components/reservationsSection/ReservationsCalendar";
 
-  import { Button } from "@/components/ui/button";
-  import { Badge } from "@/components/ui/badge";
-  import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-  import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-  import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from "@/components/ui/table";
-  import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-  import CreateReservationModal, { OwnerReservation as ModalOwnerReservation } from "@/components/reservationsSection/CreateReservation";
+type OwnerReservation = {
+  id: string;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+  payment_status?: string;
+  total_price?: number;
+  court_name?: string;
+  complex_name?: string;
+  full_name?: string;
+  sport_courts?: { name?: string; sport?: string };
+  sport_complexes?: { name?: string };
+  profiles?: { full_name?: string };
+};
 
+const planLabel = (status?: string) => status === "active" ? "Activo" : status === "trial" ? "En prueba" : "Sin plan activo";
 
-  import {
-    BarChart3, Calendar, CheckCircle2, Clock, Eye, Layers, LogOut, MapPin, Megaphone,
-    Plus, Settings, ShieldAlert, Sparkles, User, Users
-  } from "lucide-react";
-  import ReservationsCalendar from "@/components/reservationsSection/ReservationsCalendar";
-  import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu";
-  import { Avatar, AvatarFallback } from "@radix-ui/react-avatar";
-import OwnerHeader from "@/components/HeaderOwner";
+export default function OwnerDashboard() {
+  const { user, signOut } = useAuth();
+  const { profile, isOwner, loading: profileLoading } = useProfile();
+  const { complexes, loading: complexesLoading, fetchOwnerComplexes } = useComplexes();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState("today");
+  const [reservations, setReservations] = useState<OwnerReservation[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
+  const [createForComplexId, setCreateForComplexId] = useState<string | null>(null);
+  const [notificationRefresh, setNotificationRefresh] = useState(0);
 
-  interface OwnerReservation {
-    id: string;
-    user_id: string;
-    complex_id: string;
-    court_id: string;
-    reservation_date: string;           // YYYY-MM-DD
-    start_time: string;                 // HH:mm
-    end_time: string;                   // HH:mm
-    total_price?: number;
-    payment_status: "pending" | "approved" | "cancelled" | "paid";
-    sport_complexes?: { 
-      id: string; 
-      name: string; 
-      owner_id: string; 
-    };
-    sport_courts?: { 
-      name: string; 
-      sport: string; 
-    };
-    profiles?: { full_name: string }
-  }
+  useEffect(() => {
+    if (!profileLoading && !user) navigate("/auth");
+    if (!profileLoading && user && !isOwner) navigate("/");
+  }, [isOwner, navigate, profileLoading, user]);
 
-  const OwnerDashboard = () => {
-    const { user, signOut } = useAuth();
-    const { isOwner, loading: profileLoading, profile } = useProfile();
-    console.log('user',user);
-    const { complexes, loading: complexesLoading, fetchOwnerComplexes } = useComplexes(user?.id ?? undefined, isOwner );
-    const navigate = useNavigate();
-    const [tab, setTab] = useState<"dashboard" | "reservations" | "notifications" | "plus">("dashboard");
-    const [resLoading, setResLoading] = useState(false);
-    const [reservations, setReservations] = useState<OwnerReservation[]>([]);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [authReady, setAuthReady] = useState(false);
+  useEffect(() => {
+    if (isOwner && user?.id) void fetchOwnerComplexes(user.id);
+    // The hook exposes a non-memoized fetcher; owner identity is the actual data boundary.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, user?.id]);
 
-    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    interface ReservationWithProfile {
-      id: string;
-      user_id: string;
-      complex_id: string;
-      court_id: string;
-      reservation_date: string;
-      start_time: string;
-      end_time: string;
-      total_price: number;
-      deposit_amount: number;
-      deposit_paid: boolean;
-      payment_method: string;
-      payment_status: string;
-      mercadopago_payment_id: string | null;
-      notes: string | null;
-      created_at: string;
-      updated_at: string;
-      sport_complexes: { id: string; name: string; owner_id: string };
-      sport_courts: { name: string; sport: string };
-      full_name: string; // <- del creador de la reserva
-    }
-
-    // Llamamos a fetchOwnerComplexes UNA VEZ cuando tengamos user e isOwner.
-    // Usamos profile.id si existe (owner id real), si no usamos user.id como fallback.
-    useEffect(() => {
-      if (isOwner) {
-        const ownerIdToFetch = profile?.id;
-        console.log("Fetching owner complexes for id:", ownerIdToFetch);
-        // fetchOwnerComplexes(ownerIdToFetch);
-        console.log('complexes',complexes);
-      } else {
-        // si no es owner o no hay user, mantener el estado como vacío para evitar leaks en UI
-        // (no forzamos setComplexes aquí porque el hook useComplexes controla su propio estado)
-        console.log("No fetchOwnerComplexes: user or isOwner missing", { user: !!user, isOwner });
-      }
-      console.log("profile", profile);
-    }, [isOwner, profile?.id]);
-
-    useEffect(() => {
-      // suscripción a cambios de auth; se dispara inmediatamente con el estado actual en v2
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
-        // cuando se ejecute por primera vez, sabemos que supabase ya consultó el storage
-        setAuthReady(true);
-        // opcional: si querés puedes loggear session para debug
-        // console.log("onAuthStateChange:", _event, session);
-      });
-    
-      // fallback: si getUser responde rápido (en caso que onAuthStateChange no se dispare)
-      supabase.auth.getUser().then(() => setAuthReady(true)).catch(() => setAuthReady(true));
-    
-      return () => {
-        subscription?.unsubscribe();
-      };
-    }, []);
-
-    const { anyActive, anyTrial, courtsCount } = useMemo(() => {
-      const cs = complexes ?? [];
-      const pay = cs.map((c: any) => c.payment_status) ?? [];
-      const courts = cs.reduce((acc: number, c: any) => acc + (c.courts?.length || 0), 0);
-      return {
-        anyActive: pay.some((p: any) => p === "active"),
-        anyTrial:  pay.some((p: any) => p === "trial"),
-        courtsCount: courts
-      };
-    }, [complexes]);
-
-    const loadReservations = async () => {
-      if (!user) {
-        console.warn("No hay `user` en el contexto. Abortando loadReservations.");
-        return;
-      }
-      setResLoading(true);
-    
-      try {
-        // Obtener user autenticado del cliente (opcional, sólo para logs)
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError) console.warn("supabase.auth.getUser() error:", authError);
-        const authUserId = authData?.user?.app_metadata?.id ?? user.id;
-        const ownerId = profile?.id ?? user.id;
-        console.log('ownerId', ownerId);
-        console.log('authData',authData);
-        console.log("Cargando reservas para owner (authUserId):", authUserId);
-
-        const { data, error } = await supabase
-          .rpc<any, any>("get_reservations_by_owner", {
-            owner_uuid: ownerId  
-          });
-
-        if (error) {
-          console.error("Error al obtener reservas:", error);
-          setReservations([]);
-          return;
-        }
-    
-        console.log("Reservas devueltas por Supabase (post-RLS):", Array.isArray(data) ? data.length : 0);
-        console.log("data:", data);
-        setReservations((data ?? []) as unknown as OwnerReservation[]);
-      } catch (err) {
-        console.error("Error inesperado en loadReservations:", err);
-        setReservations([]);
-      } finally {
-        setResLoading(false);
-      }
-    };
-
-    const handleCreatedReservation = (res: ModalOwnerReservation) => {
-      // normalizar la estructura para el estado local
-      const normalized: OwnerReservation = {
-        id: res.reservation_id ?? (res as any).id,
-        user_id: res.user_id,
-        complex_id: res.complex_id,
-        court_id: res.court_id,
-        reservation_date: res.reservation_date,
-        start_time: res.start_time,
-        end_time: res.end_time,
-        total_price: res.total_price ?? 0,
-        payment_status: res.payment_status ?? "pending",
-        sport_complexes: res.sport_complexes ? { id: res.sport_complexes.id ?? "", name: res.sport_complexes.name ?? "", owner_id: res.sport_complexes.owner_id ?? "" } : undefined,
-        sport_courts: res.sport_courts ? { name: res.sport_courts.name ?? "", sport: res.sport_courts.sport ?? "" } : undefined,
-        profiles: res.profiles ? { full_name: res.profiles.full_name ?? "" } : undefined,
-        };
-
-      setReservations(prev => [normalized, ...(prev ?? [])]);
-
-      // si ya estás en la pestaña reservaciones, podrías refrescar o solo insertar — aquí insertamos
-      if (tab !== "reservations") setTab("reservations");
-    };
-    
-    useEffect(() => {
-      if (tab === "reservations" ) loadReservations();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [tab]); // mantenemos deps limitadas para evitar reloops
-
-    useEffect(() => {
-      if (!authReady) {
-        return;
-      }
-    
-      if (!profileLoading && !user) {
-        navigate("/auth");
-        return;
-      }
-    
-      if (!profileLoading && user && !isOwner) {
-        navigate("/");
-        return;
-      }
-    }, [authReady, user, isOwner, profileLoading, navigate]);
-    
-
-    const handleSignOut = async () => {
-      await signOut();
-      setIsMenuOpen(false);
-      navigate("/");
-    };
-
-    return (
-      <>
-        <Helmet>
-          <title>Panel de Dueño | Cancha Libre</title>
-          <meta name="description" content="Administra tus complejos, reservas y comunicación" />
-        </Helmet>
-
-        <div className="min-h-screen bg-background">
-          {/* Header + Nav (mobile-first) */}
-          {/* <OwnerHeader
-            tab={tab}
-            setTab={setTab}
-            setIsCreateModalOpen={setIsCreateModalOpen}
-          /> */}
-          <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Left: título */}
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold leading-tight truncate">
-              Panel de Dueño
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground truncate">
-              Gestiona tus complejos, reservas y comunicación
-            </p>
-          </div>
-
-          {/* Right: botones */}
-            <div className="w-full sm:w-auto">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-2">
-                <Button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="w-full sm:w-auto min-w-0"
-                    aria-label="Crear nueva reserva"
-                >
-                    <Plus className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="truncate">Nueva reserva</span>
-                </Button>
-
-                <Button
-                    asChild
-                    variant="outline"
-                    className="w-full sm:w-auto min-w-0"
-                    aria-label="Registrar nuevo complejo"
-                >
-                    <Link to="/register-complex" className="inline-flex items-center">
-                    <Plus className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="truncate">Nuevo Complejo</span>
-                    </Link>
-                </Button>
-                {/* 🔹 Botón de cerrar sesión */}
-                <Button
-                    variant="destructive"
-                    className="w-full sm:w-auto min-w-0"
-                    onClick={handleSignOut}
-                    aria-label="Cerrar sesión"
-                >
-                    <LogOut className="w-4 h-4 mr-2 flex-shrink-0" />
-                    <span className="truncate">Cerrar sesión</span>
-                </Button>
-                </div>
-            </div>
-            
-        </div>
-      </div>
-      <div className="container mx-auto px-4 pb-3">
-            <Tabs value={tab} onValueChange={(v:any)=>setTab(v)} className="w-full">
-              <TabsList className="grid grid-cols-4 w-full">
-                <TabsTrigger value="dashboard" className="flex items-center gap-2"><BarChart3 className="w-4 h-4" />Dashboard</TabsTrigger>
-                <TabsTrigger value="reservations" className="flex items-center gap-2"><Calendar className="w-4 h-4" />Reservas</TabsTrigger>
-                <TabsTrigger value="notifications" className="flex items-center gap-2"><Megaphone className="w-4 h-4" />Notificaciones</TabsTrigger>
-                <TabsTrigger value="plus" className="flex items-center gap-2"><Sparkles className="w-4 h-4" />Plus</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          <main className="container mx-auto px-4 py-6 sm:py-8 space-y-8">
-            {/* DASHBOARD */}
-            {tab === "dashboard" && (
-              <section className="space-y-6">
-                {!anyActive && (
-                  <Alert>
-                    <ShieldAlert className="h-4 w-4" />
-                    <AlertTitle>Estás en período de prueba</AlertTitle>
-                    <AlertDescription>Algunas funciones avanzadas estarán limitadas. Activa tu plan para habilitar Acciones Plus y reportes completos.</AlertDescription>
-                  </Alert>
-                )}
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
-                  <Card><CardContent className="p-4 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs sm:text-sm text-muted-foreground">Complejos</p><p className="text-xl sm:text-2xl font-bold">{complexes?.length ?? 0}</p></div><MapPin className="w-6 h-6 sm:w-8 sm:h-8 text-primary" /></div></CardContent></Card>
-                  <Card><CardContent className="p-4 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs sm:text-sm text-muted-foreground">Canchas</p><p className="text-xl sm:text-2xl font-bold">{courtsCount}</p></div><Users className="w-6 h-6 sm:w-8 sm:h-8 text-primary" /></div></CardContent></Card>
-                  <Card><CardContent className="p-4 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs sm:text-sm text-muted-foreground">Reservas (7d)</p><p className="text-xl sm:text-2xl font-bold">{reservations.filter(r => Date.now() - new Date(r.reservation_date).getTime() <= 7*24*3600*1000).length}</p></div><Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-secondary" /></div></CardContent></Card>
-                  <Card><CardContent className="p-4 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-xs sm:text-sm text-muted-foreground">Estado del plan</p><p className="text-xl sm:text-2xl font-bold">{anyActive ? "Activo" : anyTrial ? "Prueba" : "Inactivo"}</p></div><CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-secondary" /></div></CardContent></Card>
-                </div>
-
-                <div className="space-y-3">
-                  <h2 className="text-lg sm:text-xl font-semibold">Mis Complejos</h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                    {(complexes ?? []).map((c: any) => (
-                      <Card key={c.id} className="hover:shadow-card-hover transition-all">
-                        <CardHeader className="pb-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <CardTitle className="text-base sm:text-lg">{c.name}</CardTitle>
-                              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
-                                <MapPin className="w-4 h-4" /> {c.address}
-                              </CardDescription>
-                            </div>
-                            <Badge variant={c.is_active ? "default" : "secondary"}>{c.is_active ? "Activo" : "Inactivo"}</Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          <div className="flex flex-wrap items-center justify-between text-xs sm:text-sm gap-3">
-                            <div className="flex items-center"><Users className="w-4 h-4 mr-2 text-muted-foreground" />{c.courts?.length || 0} canchas</div>
-                            <div className="flex items-center"><Clock className="w-4 h-4 mr-2 text-muted-foreground" />{c.payment_status === "trial" ? "Prueba" : c.payment_status === "active" ? "Plan activo" : "Plan inactivo"}</div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button size="sm" variant="outline" onClick={() => navigate(`/owner-complex/${c.id}`)} className="w-full"><Eye className="w-4 h-4 mr-2" />Ver</Button>
-                            {/* <Button size="sm" variant="outline" className="w-full"><Settings className="w-4 h-4 mr-2" />Editar</Button> */}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* RESERVAS */}
-            {tab === "reservations" && (
-              <>
-                {!anyActive && (
-                  <Alert>
-                    <ShieldAlert className="h-4 w-4" />
-                    <AlertTitle>Estás en período de prueba</AlertTitle>
-                    <AlertDescription>Algunas funciones avanzadas estarán limitadas. Activa tu plan para habilitar Acciones Plus y reportes completos.</AlertDescription>
-                  </Alert>
-                )}
-                <ReservationsCalendar
-                  reservations={reservations}
-                  setReservations={setReservations}
-                  resLoading={resLoading}
-                  />
-              </>
-            )}
-
-            {/* NOTIFICACIONES */}
-            {tab === "notifications" && (
-              <>
-                {!anyActive && (
-                    <Alert>
-                      <ShieldAlert className="h-4 w-4" />
-                      <AlertTitle>Estás en período de prueba</AlertTitle>
-                      <AlertDescription>Algunas funciones avanzadas estarán limitadas. Activa tu plan para habilitar Acciones Plus y reportes completos.</AlertDescription>
-                    </Alert>
-                  )}
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Automáticas</CardTitle>
-                      <CardDescription>Mensajes al crear/cancelar reservas</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        Activa notificaciones por WhatsApp o Email cuando se realiza una nueva reserva.
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <Button disabled variant="outline" className="w-full">Configurar WhatsApp</Button>
-                        <Button disabled variant="outline" className="w-full">Configurar Email</Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">*Próximamente en Acciones Plus.</p>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Manual</CardTitle>
-                      <CardDescription>Envía comunicados a tus clientes</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <Button disabled className="w-full">Enviar promoción</Button>
-                      <Button disabled variant="secondary" className="w-full">Anunciar evento</Button>
-                      <p className="text-xs text-muted-foreground">*Disponible con plan activo.</p>
-                    </CardContent>
-                  </Card>
-                </section>
-              </>
-            )}
-
-            {/* PLUS */}
-            {tab === "plus" && (
-              <>
-                  {!anyActive && (
-                    <Alert>
-                      <ShieldAlert className="h-4 w-4" />
-                      <AlertTitle>Estás en período de prueba</AlertTitle>
-                      <AlertDescription>Algunas funciones avanzadas estarán limitadas. Activa tu plan para habilitar Acciones Plus y reportes completos.</AlertDescription>
-                    </Alert>
-                  )}
-                <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {[
-                    { title: "Bloqueo de horarios recurrentes", desc: "Cierra horarios por mantenimiento o torneos." },
-                    { title: "Precios dinámicos", desc: "Ajusta el precio por hora según demanda." },
-                    { title: "Reportes avanzados", desc: "Ingresos, ocupación y comparativas." },
-                  ].map((f, i) => (
-                    <Card key={i} className={!anyActive ? "opacity-70" : ""}>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4" />{f.title}</CardTitle>
-                        <CardDescription>{f.desc}</CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex items-center justify-between">
-                        <Badge variant={anyActive ? "default" : "secondary"}>{anyActive ? "Disponible" : "Bloqueado (trial)"}</Badge>
-                        <Button disabled={!anyActive}>Usar</Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  <Card className="lg:col-span-3">
-                    <CardHeader>
-                      <CardTitle>Activa el plan para desbloquear todo</CardTitle>
-                      <CardDescription>Durante la prueba gratis, algunas funciones estarán limitadas.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-2">
-                      <Button disabled={anyActive} className="bg-gradient-sport">Activar plan</Button>
-                      <Button variant="outline">Ver beneficios</Button>
-                    </CardContent>
-                  </Card>
-                </section>
-              </>
-            )}
-            <CreateReservationModal
-              isOpen={isCreateModalOpen}
-              onClose={() => setIsCreateModalOpen(false)}
-              complexId={complexes[0]?.id ?? ""}
-              onCreated={() => {
-                void loadReservations();
-                setTab("reservations");
-              }}
-            />
-          </main>
-        </div>
-      </>
-    );
+  const loadReservations = async () => {
+    if (!user) return;
+    setReservationsLoading(true);
+    const { data, error } = await (supabase.rpc as any)("get_reservations_by_owner", { owner_uuid: profile?.id ?? user.id });
+    setReservations(error ? [] : (data ?? []) as OwnerReservation[]);
+    setReservationsLoading(false);
   };
 
-  export default OwnerDashboard;
+  useEffect(() => { if (isOwner) void loadReservations(); }, [isOwner]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = useMemo(() => reservations.filter((reservation) => reservation.reservation_date >= today && reservation.payment_status !== "cancelled").sort((a, b) => `${a.reservation_date}${a.start_time}`.localeCompare(`${b.reservation_date}${b.start_time}`)), [reservations, today]);
+  const courtsCount = complexes.reduce((sum, complex) => sum + (complex.courts?.length ?? 0), 0);
+  const planStatus = complexes.some((complex) => complex.payment_status === "active") ? "active" : complexes.some((complex) => complex.payment_status === "trial") ? "trial" : undefined;
+  const primaryComplexId = complexes[0]?.id ?? null;
+
+  if (profileLoading || complexesLoading) return <div className="min-h-screen grid place-items-center text-sm text-muted-foreground">Cargando tu espacio de trabajo…</div>;
+  if (!user || !isOwner) return null;
+
+  const refreshOperationalData = () => {
+    setNotificationRefresh((value) => value + 1);
+    void loadReservations();
+  };
+
+  return <div className="min-h-screen bg-muted/20">
+    <Helmet><title>Operación | Cancha Libre</title><meta name="description" content="Agenda, complejos y turnos de propietario" /></Helmet>
+    <header className="border-b bg-background"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Operación</p><h1 className="text-2xl font-bold">Hola, {profile?.full_name?.split(" ")[0] || "propietario"}</h1></div><div className="flex flex-wrap gap-2"><Button className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600" onClick={() => setCreateForComplexId(primaryComplexId)} disabled={!primaryComplexId}><Plus className="mr-2 h-4 w-4" />Nueva reserva</Button><Button asChild variant="outline"><Link to="/register-complex"><Plus className="mr-2 h-4 w-4" />Complejo</Link></Button><Button variant="ghost" size="icon" aria-label="Cerrar sesión" onClick={async () => { await signOut(); navigate("/"); }}><LogOut className="h-4 w-4" /></Button></div></div></header>
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6"><Tabs value={tab} onValueChange={setTab} className="space-y-6"><TabsList className="grid w-full grid-cols-3 sm:w-auto"><TabsTrigger value="today"><Clock3 className="mr-2 h-4 w-4" />Hoy</TabsTrigger><TabsTrigger value="agenda"><CalendarDays className="mr-2 h-4 w-4" />Agenda</TabsTrigger><TabsTrigger value="complexes"><Settings2 className="mr-2 h-4 w-4" />Complejos</TabsTrigger></TabsList>
+      <TabsContent value="today" className="space-y-6"><section className="grid gap-4 md:grid-cols-4"><Metric label="Turnos próximos" value={upcoming.length} icon={<CalendarDays className="h-5 w-5" />} /><Metric label="Pendientes" value={upcoming.filter((reservation) => reservation.payment_status === "pending").length} icon={<Clock3 className="h-5 w-5" />} /><Metric label="Canchas" value={courtsCount} icon={<ReceiptText className="h-5 w-5" />} /><Metric label="Plan" value={planLabel(planStatus)} icon={<CheckCircle2 className="h-5 w-5" />} /></section><section className="grid gap-6 lg:grid-cols-[1.5fr_1fr]"><Card><CardHeader><CardTitle>Próximos turnos</CardTitle><CardDescription>La agenda prioriza lo que sigue, no métricas decorativas.</CardDescription></CardHeader><CardContent className="space-y-3">{reservationsLoading ? <p className="text-sm text-muted-foreground">Actualizando agenda…</p> : upcoming.slice(0, 5).map((reservation) => <div key={reservation.id} className="flex items-center justify-between gap-3 rounded-lg border p-3"><div className="min-w-0"><p className="font-medium">{reservation.court_name ?? reservation.sport_courts?.name ?? "Cancha"}</p><p className="truncate text-sm text-muted-foreground">{reservation.full_name ?? reservation.profiles?.full_name ?? "Cliente"} · {reservation.reservation_date} · {reservation.start_time.slice(0, 5)}</p></div><Badge variant={reservation.payment_status === "pending" ? "secondary" : "outline"}>{reservation.payment_status === "pending" ? "Pendiente" : "Confirmada"}</Badge></div>)}{!reservationsLoading && upcoming.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No tenés turnos próximos. Podés registrar uno manualmente.</p>}<Button variant="outline" className="w-full" onClick={() => setTab("agenda")}>Ver agenda completa</Button></CardContent></Card><OwnerNotifications refreshKey={notificationRefresh} /></section></TabsContent>
+      <TabsContent value="agenda"><div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Agenda por cancha</h2><p className="text-sm text-muted-foreground">Los turnos se consultan aquí; las modificaciones requieren una operación validada.</p></div><Button variant="outline" onClick={() => void loadReservations()}>Actualizar</Button></div><ReservationsCalendar reservations={reservations} setReservations={setReservations} resLoading={reservationsLoading} /></TabsContent>
+      <TabsContent value="complexes"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-xl font-semibold">Tus complejos</h2><p className="text-sm text-muted-foreground">Configuración, canchas y publicación de cada sede.</p></div><Button asChild><Link to="/register-complex"><Plus className="mr-2 h-4 w-4" />Nuevo complejo</Link></Button></div><div className="grid gap-4 md:grid-cols-2">{complexes.map((complex) => <Card key={complex.id}><CardHeader><div className="flex justify-between gap-3"><div><CardTitle>{complex.name}</CardTitle><CardDescription className="mt-1 flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{complex.neighborhood || complex.address}</CardDescription></div><Badge variant={complex.is_active ? "default" : "secondary"}>{complex.is_active ? "Publicado" : "No publicado"}</Badge></div></CardHeader><CardContent className="flex items-center justify-between"><span className="text-sm text-muted-foreground">{complex.courts?.length ?? 0} canchas · {planLabel(complex.payment_status)}</span><Button asChild variant="outline" size="sm"><Link to={`/owner-complex/${complex.id}`}>Gestionar</Link></Button></CardContent></Card>)}{complexes.length === 0 && <Card className="md:col-span-2"><CardContent className="py-12 text-center"><p className="font-medium">Todavía no registraste un complejo.</p><Button asChild className="mt-4"><Link to="/register-complex">Registrar complejo</Link></Button></CardContent></Card>}</div></TabsContent>
+    </Tabs></main>{createForComplexId && <CreateReservationModal isOpen onClose={() => setCreateForComplexId(null)} complexId={createForComplexId} onCreated={refreshOperationalData} />}</div>;
+}
+
+function Metric({ label, value, icon }: { label: string; value: string | number; icon: ReactNode }) { return <Card><CardContent className="flex items-center justify-between p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-semibold">{value}</p></div><span className="text-emerald-800 dark:text-emerald-300">{icon}</span></CardContent></Card>; }

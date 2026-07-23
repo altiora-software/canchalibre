@@ -1,17 +1,15 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Badge } from "@/components/ui/badge";
-import { Clock, CreditCard, DollarSign, Smartphone } from "lucide-react";
-import { SportComplexData } from "@/hooks/useComplexes";
-import { useReservations } from "@/hooks/useReservations";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar as CalendarIcon, Check, ChevronLeft, Clock, CreditCard, Loader2, Smartphone } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { SportComplexData } from '@/hooks/useComplexes';
+import { BookableSlot, useReservations } from '@/hooks/useReservations';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BookingModalProps {
   complex: SportComplexData;
@@ -19,471 +17,192 @@ interface BookingModalProps {
   onClose: () => void;
 }
 
-type Block = { start: string; end: string }; // "HH:MM"
+type PaymentMethod = 'mercado_pago' | 'transfer' | 'cash';
+
+const toLocalDate = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatTime = (time: string) => time.slice(0, 5);
+const formatCurrency = (amount: number | null | undefined) =>
+  amount && amount > 0 ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount) : 'Precio a confirmar';
 
 const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const { createReservation, checkSlotAvailability } = useReservations();
-  
+  const { createReservation, fetchBookableSlots } = useReservations();
+  const activeCourts = useMemo(() => complex.courts?.filter((court) => court.id) ?? [], [complex.courts]);
+  const [step, setStep] = useState(1);
+  const [selectedCourtId, setSelectedCourtId] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedCourt, setSelectedCourt] = useState<string>("");
-  const [startTime, setStartTime] = useState<string>("");
-  const [endTime, setEndTime] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<'mercado_pago' | 'transfer' | 'cash'>('mercado_pago');
-  const [notes, setNotes] = useState<string>("");
-  const [availableSlots, setAvailableSlots] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [totalPrice, setTotalPrice] = useState<number>(0);
+  const [slots, setSlots] = useState<BookableSlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<BookableSlot>();
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('transfer');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  
-  const toLocalDate = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
+  const selectedCourt = activeCourts.find((court) => court.id === selectedCourtId);
+  const dateKey = selectedDate ? toLocalDate(selectedDate) : null;
 
-  const ymd = useMemo(
-    () => (selectedDate ? toLocalDate(selectedDate) : null),
-    [selectedDate ? selectedDate.toDateString() : null]
-  );
-  const lastFetchKey = useRef<string | null>(null);
-  // 🔒 bloques ocupados en el día/cancha
-  const [busyBlocks, setBusyBlocks] = useState<Block[]>([]);
-
- // helpers de solapamiento (dejá esto donde prefieras)
-const toMinutes = (hhmm: string) => {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
-};
-const overlaps = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
-  Math.max(toMinutes(aStart), toMinutes(bStart)) < Math.min(toMinutes(aEnd), toMinutes(bEnd));
-
-  const isRangeFree = (from: string, to: string) =>
-    !busyBlocks.some(b => overlaps(from, to, b.start, b.end));
-  const isStartSlotFree = (time: string) => {
-    // bloque de 1h [time, time+1h) libre
-    const end = `${(parseInt(time.substring(0,2)) + 1).toString().padStart(2,"0")}:00`;
-    return isRangeFree(time, end);
-  };
-
-  // ---- slots 09–22 ----
-  const generateTimeSlots = () => {
-    const slots: string[] = [];
-    for (let hour = 9; hour <= 22; hour++) {
-      slots.push(`${hour.toString().padStart(2, '0')}:00`);
-    }
-    return slots;
-  };
-  const timeSlots = generateTimeSlots();
-
-  
-  
-
-  // 👉 traer reservas existentes (solo console.debug en errores)
   useEffect(() => {
-    if (!isOpen || !selectedCourt || !ymd) return;
-  
-    const key = `${selectedCourt}-${ymd}`;
-    if (lastFetchKey.current === key) return; // ya buscado
-    lastFetchKey.current = key;
-  
-    (async () => {
-      try {
-        setBusyBlocks([]);
-        setStartTime("");
-        setEndTime("");
-  
-        // OJO: no pedimos 'status' porque tu tabla no lo tiene.
-        const { data, error } = await supabase
-          .from("reservations")
-          .select("start_time,end_time")
-          .eq("court_id", selectedCourt)
-          .eq("reservation_date", ymd);
-  
-        if (error || !Array.isArray(data)) {
-          console.debug("reservations fetch warn:", error || "empty");
-          return; // no toast si vino 200 raro
-        }
-  
-        const blocks = data
-          .map((r: any) => ({
-            start: (r.start_time as string).slice(0, 5),
-            end: (r.end_time as string).slice(0, 5),
-          }))
-          .sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
-  
-        setBusyBlocks(blocks);
-      } catch (e) {
-        console.debug("reservations fetch error:", e);
-      }
-    })();
-  }, [isOpen, selectedCourt, ymd]);
-  
-  const checkPendingReservation = async (): Promise<boolean> => {
-    if (!user) return false;
+    if (!isOpen) return;
+    setStep(1);
+    setSelectedCourtId('');
+    setSelectedDate(undefined);
+    setSelectedSlot(undefined);
+    setSlots([]);
+    setSlotsError(null);
+    setNotes('');
+    setPaymentMethod('transfer');
+  }, [isOpen]);
 
-    try {
-      const { data: pendingCheck, error: pendingErr } = await supabase
-        .from("reservations")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("complex_id", complex.id)
-        .eq("payment_status", "pending")
-        .limit(1)
-        .maybeSingle();
-
-      if (pendingErr) {
-        // The RPC still enforces the authoritative reservation rules.
-        console.warn("No se pudo comprobar reservas pendientes:", pendingErr);
-        return true;
-      }
-
-      if (pendingCheck) {
-        toast({
-          title: "Reserva pendiente",
-          description: "Ya tenés una reserva pendiente para este complejo. Comunicate con el complejo si necesitás cancelarla.",
-          variant: "destructive",
-        });
-        return false;
-      }
-
-      return true;
-    } catch (err) {
-      console.error("Error comprobando pendientes (frontend):", err);
-      return true;
-    }
-  };
-
-  // recalcular precio
   useEffect(() => {
-    if (selectedCourt && startTime && endTime) {
-      const court = complex.courts?.find(c => c.id === selectedCourt);
-      if (!court) return;
-      const start = parseInt(startTime.split(':')[0], 10);
-      const end = parseInt(endTime.split(':')[0], 10);
-      const hours = Math.max(0, end - start);
-      const hourlyPrice = court.hourly_price || 2000;
-      setTotalPrice(hours * hourlyPrice);
-    } else {
-      setTotalPrice(0);
-    }
-  }, [selectedCourt, startTime, endTime, complex.courts]);
-  
-  // opciones válidas para hora de fin (sin pisar reservas)
-  const endTimeOptions = timeSlots.filter(time => {
-    if (!startTime) return false;
-    const startHour = parseInt(startTime.split(":")[0], 10);
-    const timeHour  = parseInt(time.split(":")[0], 10);
-    if (timeHour <= startHour) return false;
-    return isRangeFree(startTime, time);
-  });
-
-
-  // -------------------- submit --------------------
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !selectedDate || !ymd || !selectedCourt || !startTime || !endTime) {
-      toast({ title: "Error", description: "Por favor completa todos los campos requeridos", variant: "destructive" });
+    if (!isOpen || !selectedCourtId || !dateKey) {
+      setSlots([]);
       return;
     }
 
-    // chequeo local por las dudas
-    if (!isRangeFree(startTime, endTime)) {
-      toast({ title: "Horario ocupado", description: "El rango elegido se superpone con otra reserva.", variant: "destructive" });
-      return;
-    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    setSlotsError(null);
+    setSelectedSlot(undefined);
 
-    setLoading(true);
-
-    try {
-      // chequeo en servidor por condiciones de carrera
-      const isAvailable = await checkSlotAvailability(
-        selectedCourt,
-        ymd,
-        startTime,
-        endTime
-      );
-      if (isAvailable === false) {
-        toast({ title: "Error", description: "El horario seleccionado ya no está disponible", variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-
-      const reservationData = {
-        court_id: selectedCourt,
-        reservation_date: ymd,
-        start_time: startTime,
-        end_time: endTime,
-        payment_method: paymentMethod,
-        notes: notes || undefined
-      };
-
-      if (!(await checkPendingReservation())) return;
-
-      const { data, error } = await createReservation(reservationData);
-      if (error) {
-        toast({ title: "Error", description: error, variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-
-      // pagos / notificaciones (igual que tenías)
-      if (paymentMethod === 'mercado_pago') {
-        await handleMercadoPagoPayment(data.id);
-      } else if (paymentMethod === 'transfer') {
-        await handleBankTransfer(data);
-      } else {
-        await handleCashPayment(data);
-      }
-
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ------------ notificaciones (sin cambios funcionales) ------------
-  const sendWhatsAppNotification = async (reservation: any, method: string) => {
-    try {
-      const court = complex.courts?.find(c => c.id === selectedCourt);
-      const message =
-        `🏟️ *NUEVA RESERVA*\n\n` +
-        `📍 Complejo: ${complex.name}\n` +
-        `🏐 Cancha: ${court?.name} (${court?.sport})\n` +
-        `📅 Fecha: ${selectedDate?.toLocaleDateString('es-ES')}\n` +
-        `🕐 Horario: ${startTime} - ${endTime}\n` +
-        `💰 Total: $${totalPrice}\n` +
-        `💳 Método de pago: ${method === 'transfer' ? 'Transferencia' : method === 'cash' ? 'Efectivo' : 'MercadoPago'}\n` +
-        `${method === 'cash' ? `💵 Seña requerida: $${Math.round(totalPrice * 0.3)}\n` : ''}` +
-        `${notes ? `📝 Notas: ${notes}\n` : ''}` +
-        `\n📞 Contactar al cliente para confirmar`;
-
-      const { data, error } = await supabase.functions.invoke('send-whatsapp-notification', {
-        body: {
-          phoneNumber: complex.whatsapp || complex.phone || '5491133334444',
-          message,
-          complexName: complex.name,
-          reservationId: reservation.id
+    void fetchBookableSlots(selectedCourtId, dateKey)
+      .then((availableSlots) => {
+        if (!cancelled) setSlots(availableSlots);
+      })
+      .catch((error: Error) => {
+        if (!cancelled) {
+          setSlots([]);
+          setSlotsError(error.message);
         }
+      })
+      .finally(() => {
+        if (!cancelled) setSlotsLoading(false);
       });
-      if (error) throw error;
-      return data;
-    } catch (e) {
-      console.debug('sendWhatsAppNotification warn:', e);
-      throw e;
+
+    return () => { cancelled = true; };
+  }, [dateKey, fetchBookableSlots, isOpen, selectedCourtId]);
+
+  const selectCourt = (courtId: string) => {
+    setSelectedCourtId(courtId);
+    setSelectedDate(undefined);
+    setSelectedSlot(undefined);
+    setSlots([]);
+    setSlotsError(null);
+  };
+
+  const notifyComplex = async (reservationId: string) => {
+    // The Edge Function derives recipient and message from the authorised reservation.
+    const { error } = await supabase.functions.invoke('send-whatsapp-notification', {
+      body: { reservationId },
+    });
+    if (error) throw error;
+  };
+
+  const submitReservation = async () => {
+    if (!selectedCourtId || !dateKey || !selectedSlot) return;
+    setSubmitting(true);
+    const { data, error } = await createReservation({
+      court_id: selectedCourtId,
+      reservation_date: dateKey,
+      start_time: selectedSlot.start_time,
+      end_time: selectedSlot.end_time,
+      payment_method: paymentMethod,
+      notes: notes.trim() || undefined,
+    });
+
+    if (error || !data) {
+      setSubmitting(false);
+      toast({
+        title: 'No pudimos confirmar el turno',
+        description: error ?? 'Elegí otro horario e intentá nuevamente.',
+        variant: 'destructive',
+      });
+      if (/no longer available|disponible|23P01/i.test(error ?? '')) setStep(2);
+      return;
+    }
+
+    try {
+      await notifyComplex(data.id);
+      toast({ title: 'Solicitud recibida', description: 'El complejo recibió el aviso. Podés seguirla desde Mis reservas.' });
+    } catch {
+      toast({ title: 'Solicitud recibida', description: 'El complejo recibió tu reserva. Te contactará para coordinar el pago.' });
+    } finally {
+      setSubmitting(false);
+      onClose();
     }
   };
 
-  const handleMercadoPagoPayment = async (reservationId: string) => {
-    try {
-      await sendWhatsAppNotification({ id: reservationId }, 'mercado_pago');
-      toast({ title: "Reserva creada", description: "Se envió la notificación por WhatsApp. Te contactaremos para coordinar el pago por MercadoPago." });
-      onClose();
-    } catch {
-      toast({ title: "Error", description: "Reserva creada pero no se pudo enviar la notificación", variant: "destructive" });
-      onClose();
-    }
-  };
-
-  const handleBankTransfer = async (reservation: any) => {
-    try {
-      await sendWhatsAppNotification(reservation, 'transfer');
-      toast({ title: "Reserva creada", description: "Se envió la notificación por WhatsApp. Te contactaremos con los datos para la transferencia." });
-      onClose();
-    } catch {
-      toast({ title: "Reserva creada", description: "Te contactaremos con los datos para la transferencia bancaria" });
-      onClose();
-    }
-  };
-
-  const handleCashPayment = async (reservation: any) => {
-    try {
-      const depositAmount = totalPrice * 0.3;
-      await sendWhatsAppNotification(reservation, 'cash');
-      toast({ title: "Reserva creada", description: `Se envió la notificación. Debes pagar una seña de $${Math.round(depositAmount)}.` });
-      onClose();
-    } catch {
-      const depositAmount = totalPrice * 0.3;
-      toast({ title: "Reserva creada", description: `Debes pagar una seña de $${Math.round(depositAmount)}. Te contactaremos para coordinar el pago.` });
-      onClose();
-    }
-  };
+  const canContinue = (currentStep: number) =>
+    currentStep === 1 ? Boolean(selectedCourtId) : currentStep === 2 ? Boolean(selectedDate && selectedSlot) : true;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Reservar cancha en {complex.name}
-          </DialogTitle>
+          <DialogTitle>Reservar en {complex.name}</DialogTitle>
+          <p className="text-sm text-muted-foreground">Tu turno se reserva al confirmar. El pago se coordina con el complejo.</p>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Court Selection */}
-          <div className="space-y-2">
-            <Label>Seleccionar cancha</Label>
-            <Select
-              value={selectedCourt}
-              onValueChange={(v) => { setSelectedCourt(v); setStartTime(""); setEndTime(""); }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Elige una cancha" />
-              </SelectTrigger>
-              <SelectContent>
-                {complex.courts?.map((court) => (
-                  <SelectItem key={court.id} value={court.id}>
-                    {court.name} - {court.sport} - ${court.hourly_price || 2000}/hora
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <ol className="grid grid-cols-3 gap-2 text-sm" aria-label="Progreso de reserva">
+          {['Cancha', 'Día y hora', 'Confirmar'].map((label, index) => {
+            const current = index + 1;
+            return <li key={label} className={`rounded-md px-3 py-2 text-center ${step >= current ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{current}. {label}</li>;
+          })}
+        </ol>
 
-          {/* Date Selection */}
-          <div className="space-y-2">
-            <Label>Fecha de reserva</Label>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={(d) => { setSelectedDate(d); setStartTime(""); setEndTime(""); }}
-              disabled={(date) =>
-                date < new Date(new Date().setHours(0,0,0,0)) ||
-                date > new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-              }
-              className="rounded-md border w-fit"
-            />
-          </div>
-
-          {/* Time Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Hora de inicio</Label>
-              <Select value={startTime} onValueChange={(v) => { setStartTime(v); setEndTime(""); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {timeSlots.slice(0, -1).map((time) => (
-                    <SelectItem key={time} value={time} disabled={!isStartSlotFree(time)}>
-                      {time}{!isStartSlotFree(time) ? " (ocupado)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {step === 1 && (
+          <section className="space-y-3" aria-labelledby="court-heading">
+            <div><h2 id="court-heading" className="font-semibold">Elegí una cancha</h2><p className="text-sm text-muted-foreground">Mostramos sólo canchas activas del complejo.</p></div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {activeCourts.map((court) => (
+                <button type="button" key={court.id} onClick={() => selectCourt(court.id)} className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedCourtId === court.id ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}`}>
+                  <div className="flex items-start justify-between gap-2"><span className="font-semibold">{court.name}</span>{selectedCourtId === court.id && <Check className="h-5 w-5 text-primary" aria-label="Seleccionada" />}</div>
+                  <p className="mt-1 text-sm text-muted-foreground">{court.sport} · {court.players_capacity} jugadores</p>
+                  <p className="mt-2 text-sm">Desde {formatCurrency(court.hourly_price)} / hora</p>
+                </button>
+              ))}
             </div>
+            {!activeCourts.length && <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">Este complejo no tiene canchas disponibles para reservar.</p>}
+          </section>
+        )}
 
-            <div className="space-y-2">
-              <Label>Hora de fin</Label>
-              <Select value={endTime} onValueChange={setEndTime}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {endTimeOptions.map((time) => (
-                    <SelectItem key={time} value={time}>
-                      {time}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        {step === 2 && (
+          <section className="space-y-4" aria-labelledby="slot-heading">
+            <div><h2 id="slot-heading" className="font-semibold">Elegí día y horario</h2><p className="text-sm text-muted-foreground">Los horarios se consultan en tiempo real y pueden cambiar antes de confirmar.</p></div>
+            <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || date > new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)} className="rounded-md border" />
+            {dateKey && <div className="space-y-2"><Label>Turnos disponibles {selectedCourt ? `para ${selectedCourt.name}` : ''}</Label>
+              {slotsLoading && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Cargando horarios…</p>}
+              {slotsError && <p role="alert" className="text-sm text-destructive">{slotsError}</p>}
+              {!slotsLoading && !slotsError && !slots.length && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">No hay turnos publicados para esta fecha. Probá otro día o contactá al complejo.</p>}
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{slots.map((slot) => {
+                const selected = selectedSlot?.start_time === slot.start_time && selectedSlot?.end_time === slot.end_time;
+                return <Button key={`${slot.start_time}-${slot.end_time}`} type="button" variant={selected ? 'default' : 'outline'} onClick={() => setSelectedSlot(slot)}>{formatTime(slot.start_time)}</Button>;
+              })}</div>
+            </div>}
+          </section>
+        )}
 
-          {/* Payment Method */}
-          <div className="space-y-2">
-            <Label>Método de pago</Label>
-            <div className="grid grid-cols-1 gap-3">
-              <div
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'mercado_pago' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                }`}
-                onClick={() => setPaymentMethod('mercado_pago')}
-              >
-                <div className="flex items-center gap-3">
-                  <CreditCard className="w-5 h-5 text-blue-600" />
-                  <div>
-                    <p className="font-medium">MercadoPago</p>
-                    <p className="text-sm text-muted-foreground">Pago online seguro</p>
-                  </div>
-                </div>
-              </div>
+        {step === 3 && selectedCourt && selectedDate && selectedSlot && (
+          <section className="space-y-4" aria-labelledby="confirmation-heading">
+            <div><h2 id="confirmation-heading" className="font-semibold">Revisá tu solicitud</h2><p className="text-sm text-muted-foreground">El importe final y cualquier seña se calculan en el servidor al confirmar.</p></div>
+            <div className="rounded-lg bg-muted p-4 text-sm space-y-1"><p><strong>Cancha:</strong> {selectedCourt.name}</p><p><strong>Fecha:</strong> {selectedDate.toLocaleDateString('es-AR')}</p><p><strong>Horario:</strong> {formatTime(selectedSlot.start_time)} – {formatTime(selectedSlot.end_time)}</p><p><strong>Precio publicado:</strong> desde {formatCurrency(selectedCourt.hourly_price)} / hora</p></div>
+            <div className="space-y-2"><Label>Cómo coordinás el pago</Label><div className="grid gap-2 sm:grid-cols-3">
+              {([{ value: 'transfer', label: 'Transferencia', icon: Smartphone }, { value: 'cash', label: 'Efectivo', icon: Clock }, { value: 'mercado_pago', label: 'Mercado Pago', icon: CreditCard }] as const).map(({ value, label, icon: Icon }) => <Button key={value} type="button" variant={paymentMethod === value ? 'default' : 'outline'} className="h-auto py-3" onClick={() => setPaymentMethod(value)}><Icon className="mr-2 h-4 w-4" />{label}</Button>)}
+            </div><p className="text-xs text-muted-foreground">El complejo te contactará para coordinar el método seleccionado.</p></div>
+            <div className="space-y-2"><Label htmlFor="booking-notes">Notas (opcional)</Label><Textarea id="booking-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} placeholder="Por ejemplo, una consulta para el complejo" /></div>
+          </section>
+        )}
 
-              <div
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'transfer' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                }`}
-                onClick={() => setPaymentMethod('transfer')}
-              >
-                <div className="flex items-center gap-3">
-                  <Smartphone className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="font-medium">Transferencia Bancaria</p>
-                    <p className="text-sm text-muted-foreground">Coordinamos los datos contigo</p>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                  paymentMethod === 'cash' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                }`}
-                onClick={() => setPaymentMethod('cash')}
-              >
-                <div className="flex items-center gap-3">
-                  <DollarSign className="w-5 h-5 text-orange-600" />
-                  <div>
-                    <p className="font-medium">Efectivo</p>
-                    <p className="text-sm text-muted-foreground">
-                      Seña del 30% requerida ({totalPrice > 0 ? `$${Math.round(totalPrice * 0.3)}` : '$0'})
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label>Notas adicionales (opcional)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Cualquier información adicional..."
-              rows={3}
-            />
-          </div>
-
-          {/* Price Summary */}
-          {totalPrice > 0 && (
-            <div className="p-4 bg-muted rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="font-medium">Total a pagar:</span>
-                <Badge variant="default" className="text-lg px-3 py-1">
-                  ${totalPrice}
-                </Badge>
-              </div>
-              {paymentMethod === 'cash' && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Seña requerida: ${Math.round(totalPrice * 0.3)} (30%)
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <div className="flex gap-3">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading || !selectedDate || !selectedCourt || !startTime || !endTime} className="flex-1">
-              {loading ? "Procesando..." : "Confirmar Reserva"}
-            </Button>
-          </div>
-        </form>
+        <div className="flex gap-3 pt-2">
+          {step > 1 ? <Button type="button" variant="outline" onClick={() => setStep((current) => current - 1)} disabled={submitting}><ChevronLeft className="mr-1 h-4 w-4" /> Atrás</Button> : <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>}
+          {step < 3 ? <Button type="button" className="ml-auto" onClick={() => setStep((current) => current + 1)} disabled={!canContinue(step)}>Continuar</Button> : <Button type="button" className="ml-auto" onClick={submitReservation} disabled={submitting}>{submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Confirmando…</> : <><CalendarIcon className="mr-2 h-4 w-4" />Confirmar solicitud</>}</Button>}
+        </div>
       </DialogContent>
     </Dialog>
   );

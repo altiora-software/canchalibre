@@ -1,313 +1,83 @@
-import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Calendar, dateFnsLocalizer, Event, Views } from "react-big-calendar";
-import { format, parse, startOfWeek, getDay } from "date-fns";
+import { format, getDay, parse, startOfWeek } from "date-fns";
 import { es } from "date-fns/locale/es";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import withDragAndDrop from "react-big-calendar/lib/addons/dragAndDrop";
-import "react-big-calendar/lib/addons/dragAndDrop/styles.css";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface OwnerReservation {
-    id: string;
-    user_id: string;
-    complex_id: string;
-    court_id: string;
-    reservation_date: string;           // YYYY-MM-DD
-    start_time: string;                 // HH:mm
-    end_time: string;                   // HH:mm
-    total_price?: number;
-    payment_status: "pending" | "confirmed" | "cancelled" | "paid";
-    sport_complexes?: { 
-      id: string; 
-      name: string; 
-      owner_id: string; 
-    };
-    sport_courts?: { 
-      name: string; 
-      sport: string; 
-    };
-    profiles?: { full_name: string }
-  }
-  
+type Reservation = {
+  id: string;
+  reservation_date: string;
+  start_time: string;
+  end_time: string;
+  payment_status?: string;
+  total_price?: number;
+  court_name?: string;
+  complex_name?: string;
+  full_name?: string;
+  sport_courts?: { name?: string; sport?: string };
+  sport_complexes?: { name?: string };
+  profiles?: { full_name?: string };
+};
 
-const locales = { es };
 const localizer = dateFnsLocalizer({
   format,
   parse,
   startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 1 }),
   getDay,
-  locales,
+  locales: { es },
 });
 
-const DnDCalendar = withDragAndDrop(Calendar);
+const statusLabel = (status?: string) => {
+  if (status === "paid") return "Pagada";
+  if (status === "approved" || status === "confirmed") return "Confirmada";
+  if (status === "cancelled") return "Cancelada";
+  return "Pendiente";
+};
 
 interface Props {
-  reservations: any;
-  setReservations: (res: any) => void;
+  reservations: Reservation[];
+  setReservations: Dispatch<SetStateAction<Reservation[]>>;
   resLoading: boolean;
 }
 
-export default function ReservationsCalendar({ reservations, setReservations, resLoading }: Props) {
-  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
-    console.log('reservations dentro del componenete', reservations);
+/** Agenda de lectura: cambiar un turno requiere un flujo validado por servidor. */
+export default function ReservationsCalendar({ reservations, resLoading }: Props) {
+  const [selected, setSelected] = useState<Reservation | null>(null);
+  const events = useMemo<Event[]>(() => reservations.map((reservation) => ({
+    title: `${reservation.court_name ?? reservation.sport_courts?.name ?? "Cancha"} · ${reservation.full_name ?? reservation.profiles?.full_name ?? "Reserva"}`,
+    start: new Date(`${reservation.reservation_date}T${reservation.start_time}`),
+    end: new Date(`${reservation.reservation_date}T${reservation.end_time}`),
+    resource: reservation,
+  })), [reservations]);
 
-
-const events: Event[] = reservations.map((r) => {
-  // fallback: si no viene directamente, lo buscamos en nested
-  const courtName = r.court_name ?? r.sport_courts?.name ?? "Cancha";
-  const complexName = r.complex_name ?? r.sport_complexes?.name ?? "Complejo";
-  const fullName = r.full_name ?? r.profiles?.full_name ?? "Cliente";
-
-  return {
-    title: `${courtName} · (${fullName})`,
-    start: new Date(`${r.reservation_date}T${r.start_time}`),
-    end: new Date(`${r.reservation_date}T${r.end_time}`),
-    resource: {
-      ...r,
-      sport_complexes: r.sport_complexes || { name: complexName },
-      sport_courts: r.sport_courts || { name: courtName, sport: r.sport ?? "Deporte" },
-      profiles: r.profiles || { full_name: fullName },
-    },
-  };
-});
-
-
-  console.log('events',events)
-
-  const moveEvent = async ({ event, start, end }: { event: Event; start: Date; end: Date }) => {
-    try {
-      const newDate = start.toISOString().split("T")[0];
-      const newStartTime = start.toTimeString().slice(0, 5);
-      const newEndTime = end.toTimeString().slice(0, 5);
-
-      const { error } = await supabase
-        .from("reservations")
-        .update({ reservation_date: newDate, start_time: newStartTime, end_time: newEndTime })
-        .eq("id", event.resource.id);
-
-      if (error) throw error;
-
-      setReservations((prev: any) =>
-        prev.map((r: any) =>
-          r.id === event.resource.id ? { ...r, reservation_date: newDate, start_time: newStartTime, end_time: newEndTime } : r
-        )
-      );
-    } catch (err) {
-      console.error("Error moviendo reserva:", err);
-    }
-  };
-
-  const formats = {
-    dayFormat: (date: Date, culture?: string, localizer?: any) =>
-      format(date, 'EEEE', { locale: es }), // día completo, ej. "martes"
-    weekdayFormat: (date: Date) => format(date, 'EEEE', { locale: es }),
-    dayHeaderFormat: (date: Date) => format(date, 'EEEE dd', { locale: es }),
-    dayRangeHeaderFormat: ({ start, end }: any) =>
-      `${format(start, 'dd MMMM yyyy', { locale: es })} – ${format(end, 'dd MMMM yyyy', { locale: es })}`,
-    monthHeaderFormat: (date: Date) => format(date, 'MMMM yyyy', { locale: es }),
-    dayAgendaHeaderFormat: (date: Date) => format(date, 'EEEE dd', { locale: es }),
-  };  
-
-  const messages = {
-    allDay: "Todo el día",
-    previous: "Anterior",
-    next: "Siguiente",
-    today: "Hoy",
-    month: "Mes",
-    week: "Semana",
-    day: "Día",
-    agenda: "Agenda",
-    date: "Fecha",
-    time: "Hora",
-    event: "Evento",
-    noEventsInRange: "No hay eventos en este rango.",
-    showMore: (count: number) => `+ Ver`,
-  };
-
-  const updateReservationStatus = async (id: string, newStatus: OwnerReservation["payment_status"]) => {
-    try {
-      const { error } = await supabase
-        .from("reservations")
-        .update({ payment_status: newStatus })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setReservations((prev) => prev.map((r) => (r.id === id ? { ...r, payment_status: newStatus } : r)));
-      setSelectedEvent(null);
-    } catch (err) {
-      console.error("Error actualizando reserva:", err);
-    }
-  };
-
-  return (
-    <section className="px-2 sm:px-4 md:px-6">
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Reservas</CardTitle>
-          <CardDescription>Calendario mensual</CardDescription>
-        </CardHeader>
-        <CardContent className="w-full overflow-x-auto">
-          {resLoading ? (
-            <div className="py-10 text-center">Cargando reservas…</div>
-          ) : reservations.length === 0 ? (
-            <div className="py-10 text-center text-muted-foreground">Aún no hay reservas</div>
-          ) : (
-            <DnDCalendar
-              localizer={localizer}
-              events={events}
-              formats={formats}
-              startAccessor="start"
-              endAccessor="end"
-              style={{ height: 600, minWidth: "100%" }}
-              views={[Views.MONTH, Views.WEEK, Views.DAY]}
-              messages= {messages}
-              onSelectEvent={(event) => setSelectedEvent(event.resource)}
-              onEventDrop={moveEvent}
-              resizable
-              onEventResize={moveEvent}
-              eventPropGetter={(event) => {
-                const status = event.resource.payment_status;
-                let backgroundColor = "#93C5FD"; // pendiente azul
-                if (status === "confirmed") backgroundColor = "#34D399"; // verde
-                if (status === "cancelled") backgroundColor = "#F87171"; // rojo
-                return { style: { backgroundColor, color: "white", borderRadius: 6, padding: "2px" } };
-              }}
-            />
-          )}
-
-        {selectedEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <Card className="w-full max-w-md mx-2">
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 w-full">
-                <div>
-                    <CardTitle className="flex items-center gap-2">
-                    <span className="text-base sm:text-lg font-semibold">
-                        {selectedEvent.sport_complexes?.name}
-                    </span>
-                    <span className="text-sm text-muted-foreground">· {selectedEvent.sport_courts?.name}</span>
-                    </CardTitle>
-                    <CardDescription className="text-sm">
-                    <span className="block">{selectedEvent.profiles?.full_name}</span>
-                    <span className="block">
-                        {selectedEvent.reservation_date.split("-").reverse().join("/")} ·{" "}
-                        {selectedEvent.start_time.slice(0,5)} – {selectedEvent.end_time.slice(0,5)}
-                    </span>
-                    </CardDescription>
-                </div>
-
-                <div className="flex items-start gap-2">
-                    {/* Estado */}
-                    <Badge className="uppercase px-2 py-1 text-xs">
-                    {selectedEvent.payment_status}
-                    </Badge>
-                </div>
-                </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                    <div className="text-xs text-muted-foreground">Deporte</div>
-                    <div className="font-medium">{selectedEvent.sport || selectedEvent.sport_courts?.sport}</div>
-                </div>
-
-                <div>
-                    <div className="text-xs text-muted-foreground">Método de pago</div>
-                    <div className="font-medium capitalize">
-                    {selectedEvent.payment_method === "mercado_pago" ? "Mercado Pago" : selectedEvent.payment_method}
-                    </div>
-                </div>
-
-                <div>
-                    <div className="text-xs text-muted-foreground">Precio total</div>
-                    <div className="font-medium">
-                    {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(selectedEvent.total_price ?? 0)}
-                    </div>
-                </div>
-
-                <div>
-                    <div className="text-xs text-muted-foreground">Depósito</div>
-                    <div className="font-medium">
-                    {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(selectedEvent.deposit_amount ?? 0)}
-                    {selectedEvent.deposit_paid ? <span className="ml-2 text-sm text-green-500">(Pagado)</span> : <span className="ml-2 text-sm text-yellow-400">(No pagado)</span>}
-                    </div>
-                </div>
-                </div>
-
-                {/* IDs, notas y timestamps */}
-                <div className="space-y-2 text-sm">
-                {selectedEvent.mercadopago_payment_id && (
-                    <div>
-                    <div className="text-xs text-muted-foreground">MP Payment ID</div>
-                    <div className="break-words flex items-center gap-2">
-                        <span className="font-mono text-sm">{selectedEvent.mercadopago_payment_id}</span>
-                        <button
-                        className="text-xs underline"
-                        onClick={() => navigator.clipboard?.writeText(selectedEvent.mercadopago_payment_id || "")}
-                        >
-                        Copiar
-                        </button>
-                    </div>
-                    </div>
-                )}
-
-                {selectedEvent.notes && (
-                    <div>
-                    <div className="text-xs text-muted-foreground">Notas</div>
-                    <div className="whitespace-pre-wrap">{selectedEvent.notes}</div>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    <div>
-                    <div>Creado</div>
-                    <div className="font-mono text-[13px]">
-                        {new Date(selectedEvent.created_at).toLocaleString("es-AR")}
-                    </div>
-                    </div>
-                    <div>
-                    <div>Actualizado</div>
-                    <div className="font-mono text-[13px]">
-                        {new Date(selectedEvent.updated_at).toLocaleString("es-AR")}
-                    </div>
-                    </div>
-                </div>
-                </div>
-
-                {/* Acciones */}
-                <div className="flex flex-col sm:flex-row gap-2 justify-end">
-                {selectedEvent.payment_status !== "confirmed" && (
-                    <Button onClick={() => updateReservationStatus(selectedEvent.reservation_id, "confirmed")}>
-                    Aprobar
-                    </Button>
-                )}
-                {selectedEvent.payment_status !== "cancelled" && (
-                    <Button variant="destructive" onClick={() => updateReservationStatus(selectedEvent.reservation_id, "cancelled")}>
-                    Cancelar
-                    </Button>
-                )}
-                {selectedEvent.payment_status !== "pending" && (
-                    <Button variant="secondary" onClick={() => updateReservationStatus(selectedEvent.reservation_id, "pending")}>
-                    Poner pendiente
-                    </Button>
-                )}
-
-                <Button variant="ghost" onClick={() => setSelectedEvent(null)}>
-                    Cerrar
-                </Button>
-                </div>
-            </CardContent>
-            </Card>
-        </div>
-        )}
-
-        </CardContent>
-      </Card>
-    </section>
-  );
+  return <Card>
+    <CardHeader>
+      <CardTitle>Agenda</CardTitle>
+      <CardDescription>Consultá los turnos por día, semana o mes. Para modificar un turno, coordiná una nueva reserva.</CardDescription>
+    </CardHeader>
+    <CardContent>
+      {resLoading ? <p className="py-12 text-center text-sm text-muted-foreground">Cargando agenda…</p> : events.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">Todavía no hay turnos registrados.</p> : <Calendar
+        localizer={localizer}
+        events={events}
+        startAccessor="start"
+        endAccessor="end"
+        views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+        defaultView={Views.WEEK}
+        culture="es"
+        style={{ height: 640 }}
+        messages={{ today: "Hoy", previous: "Anterior", next: "Siguiente", month: "Mes", week: "Semana", day: "Día", agenda: "Lista", noEventsInRange: "No hay turnos en este rango." }}
+        onSelectEvent={(event) => setSelected(event.resource as Reservation)}
+        eventPropGetter={(event) => ({ style: { backgroundColor: event.resource.payment_status === "cancelled" ? "#b91c1c" : "#1d4ed8", color: "#ffffff", borderRadius: 6 } })}
+      />}
+      {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Detalle del turno">
+        <Card className="w-full max-w-md">
+          <CardHeader><div className="flex items-start justify-between gap-4"><div><CardTitle>{selected.court_name ?? selected.sport_courts?.name ?? "Cancha"}</CardTitle><CardDescription>{selected.complex_name ?? selected.sport_complexes?.name}</CardDescription></div><Badge className={selected.payment_status === "cancelled" ? "border-red-800 bg-red-800 text-white dark:border-red-700 dark:bg-red-700" : "border-blue-800 bg-blue-800 text-white dark:border-blue-700 dark:bg-blue-700"}>{statusLabel(selected.payment_status)}</Badge></div></CardHeader>
+          <CardContent className="space-y-3 text-sm"><p><strong>Cliente:</strong> {selected.full_name ?? selected.profiles?.full_name ?? "No informado"}</p><p><strong>Horario:</strong> {selected.reservation_date} · {selected.start_time.slice(0, 5)}–{selected.end_time.slice(0, 5)}</p>{typeof selected.total_price === "number" && <p><strong>Total:</strong> {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(selected.total_price)}</p>}<p className="text-muted-foreground">Los cambios de horario y estado no se realizan desde esta agenda.</p><Button variant="outline" className="w-full" onClick={() => setSelected(null)}>Cerrar</Button></CardContent>
+        </Card>
+      </div>}
+    </CardContent>
+  </Card>;
 }

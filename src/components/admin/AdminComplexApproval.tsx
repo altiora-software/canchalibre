@@ -94,11 +94,15 @@ const AdminComplexApproval = () => {
   };
   
   const rejectComplex = async (complexId: string) => {
+    if (!rejectionReason.trim()) {
+      toast({ title: "Indicá un motivo", description: "El propietario necesita saber qué debe corregir antes de reenviar el complejo.", variant: "destructive" });
+      return;
+    }
     try {
       setProcessingId(complexId);
       const { error } = await (supabase.rpc as any)('reject_complex', {
         p_complex_id: complexId,
-        p_reason: rejectionReason || null,
+        p_reason: rejectionReason.trim(),
       });
       if (error) throw error;
   
@@ -253,7 +257,7 @@ const AdminComplexApproval = () => {
             <Button
               onClick={() => approveComplex(complex.id)}
               disabled={processingId === complex.id}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="flex-1 bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600"
             >
               <Check className="w-4 h-4 mr-2" />
               Aprobar (15 días gratis)
@@ -278,10 +282,10 @@ const AdminComplexApproval = () => {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="space-y-2">
-                  <Label htmlFor="reason">Motivo del rechazo (opcional)</Label>
+                  <Label htmlFor="reason">Motivo del rechazo</Label>
                   <Textarea
                     id="reason"
-                    placeholder="Explica el motivo del rechazo para notificar al propietario..."
+                    placeholder="Explicá qué debe corregir el propietario..."
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
                   />
@@ -290,6 +294,7 @@ const AdminComplexApproval = () => {
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => rejectComplex(complex.id)}
+                    disabled={!rejectionReason.trim() || processingId === complex.id}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
                     Rechazar
@@ -351,7 +356,7 @@ const AdminComplexApproval = () => {
           <Card>
             <CardContent className="flex items-center justify-center py-12">
               <div className="text-center space-y-2">
-                <Check className="w-12 h-12 text-green-500 mx-auto" />
+                <Check className="mx-auto h-12 w-12 text-emerald-800 dark:text-emerald-300" />
                 <h3 className="text-lg font-medium">¡Todo al día!</h3>
                 <p className="text-muted-foreground">No hay complejos pendientes de aprobación.</p>
               </div>

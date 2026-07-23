@@ -143,7 +143,7 @@ const Auth = () => {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-4 text-foreground">
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="text-center mb-8">
@@ -153,15 +153,15 @@ const Auth = () => {
               </div>
               <span className="text-3xl font-bold text-foreground">Cancha Libre</span>
             </div>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-foreground/75 text-lg">
               Encuentra y reserva canchas deportivas
             </p>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-sm text-foreground/70 mt-2">
               Acceso para clientes
             </p>
           </div>
 
-          <Card className="shadow-card-custom border-0">
+          <Card className="shadow-card-custom border border-border/80">
             <CardHeader className="pb-6 text-center">
               <CardTitle className="text-2xl text-foreground">¡Bienvenido!</CardTitle>
               <CardDescription className="text-base">
@@ -170,8 +170,8 @@ const Auth = () => {
             </CardHeader>
             <CardContent>
               {error && (
-                <Alert className="mb-6 border-destructive/20 bg-destructive/5">
-                  <AlertDescription className="text-destructive">
+                <Alert className="mb-6 border-destructive/30 bg-destructive/10">
+                  <AlertDescription className="font-medium text-destructive">
                     {error}
                   </AlertDescription>
                 </Alert>
@@ -202,9 +202,9 @@ const Auth = () => {
                 </Button>
               </div>
 
-              <div className="mt-8 p-4 bg-primary/10 rounded-lg">
+              <div className="mt-8 rounded-lg border border-primary/20 bg-primary/10 p-4">
                 <h3 className="font-semibold text-foreground mb-2">🎾 Para clientes</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-foreground/75">
                   Explora canchas, compara precios y horarios, y contacta por WhatsApp.
                 </p>
               </div>

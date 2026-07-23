@@ -5,3 +5,9 @@ verify_jwt = true
 
 [functions.owner-onboarding]
 verify_jwt = true
+
+[functions.submit-owner-application]
+verify_jwt = false
+
+[functions.invite-approved-owner]
+verify_jwt = true

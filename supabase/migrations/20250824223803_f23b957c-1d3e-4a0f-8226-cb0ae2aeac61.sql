@@ -1,6 +1,5 @@
--- Fix function search path security issue
-DROP FUNCTION IF EXISTS public.handle_new_user();
-
+-- Fix function search path security issue. The trigger created by the baseline
+-- depends on this function, so it must be replaced in place rather than dropped.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql

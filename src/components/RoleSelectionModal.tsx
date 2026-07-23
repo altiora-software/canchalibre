@@ -95,7 +95,7 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
               type="email"
               value={userEmail}
               disabled
-              className="bg-muted"
+              className="border-border bg-muted text-foreground disabled:cursor-not-allowed disabled:opacity-100"
             />
           </div>
           
@@ -106,7 +106,7 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
               type="text"
               value={userName}
               disabled
-              className="bg-muted"
+              className="border-border bg-muted text-foreground disabled:cursor-not-allowed disabled:opacity-100"
             />
           </div>
 
@@ -121,13 +121,13 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
                 <SelectItem value="customer">
                   <div className="flex flex-col items-start">
                     <span className="font-medium">Cliente</span>
-                    <span className="text-xs text-muted-foreground">Reservar canchas deportivas</span>
+                    <span className="text-xs text-foreground/70">Reservar canchas deportivas</span>
                   </div>
                 </SelectItem>
                 <SelectItem value="owner">
                   <div className="flex flex-col items-start">
                     <span className="font-medium">Propietario de Complejo</span>
-                    <span className="text-xs text-muted-foreground">Gestionar mi complejo deportivo</span>
+                    <span className="text-xs text-foreground/70">Gestionar mi complejo deportivo</span>
                   </div>
                 </SelectItem>
               </SelectContent>
@@ -138,12 +138,12 @@ export const RoleSelectionModal = ({ isOpen, onClose, userEmail, userName, force
         {forceRole && (
           <div className="space-y-2">
             <Label>Tipo de Usuario</Label>
-            <div className="p-3 bg-muted rounded-md">
+            <div className="rounded-md border border-border bg-muted p-3 text-foreground">
               <div className="flex flex-col">
                 <span className="font-medium">
                   {forceRole === 'owner' ? 'Propietario de Complejo' : 'Cliente'}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-foreground/70">
                   {forceRole === 'owner' ? 'Gestionar mi complejo deportivo' : 'Reservar canchas deportivas'}
                 </span>
               </div>

@@ -74,7 +74,7 @@ export default function ReservationsSection({ reservations, setReservations, res
                   selected={selectedDate}
                   onSelect={setSelectedDate}
                   modifiersClassNames={{
-                    selected: "bg-blue-600 text-white rounded-full",
+                    selected: "bg-blue-800 text-white rounded-full hover:bg-blue-900",
                   }}
                   className="w-full"
                 />
@@ -98,6 +98,7 @@ export default function ReservationsSection({ reservations, setReservations, res
                               ? "destructive"
                               : "secondary"
                           }
+                          className={r.payment_status === "confirmed" ? "border-emerald-800 bg-emerald-800 text-white dark:border-emerald-700 dark:bg-emerald-700" : r.payment_status === "cancelled" ? "border-red-800 bg-red-800 text-white dark:border-red-700 dark:bg-red-700" : "border-blue-800 bg-blue-800 text-white dark:border-blue-700 dark:bg-blue-700"}
                         >
                           {r.payment_status}
                         </Badge>
@@ -112,6 +113,7 @@ export default function ReservationsSection({ reservations, setReservations, res
                         {r.payment_status !== "confirmed" && (
                           <Button
                             size="sm"
+                            className="bg-emerald-800 text-white hover:bg-emerald-900 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                             onClick={() => updateReservationStatus(r.id, "confirmed")}
                           >
                             Aprobar
@@ -130,6 +132,7 @@ export default function ReservationsSection({ reservations, setReservations, res
                           <Button
                             size="sm"
                             variant="secondary"
+                            className="bg-blue-800 text-white hover:bg-blue-900 dark:bg-blue-700 dark:hover:bg-blue-600"
                             onClick={() => updateReservationStatus(r.id, "pending")}
                           >
                             Marcar pendiente
