@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 import { divIcon, latLngBounds } from "leaflet";
 import { ExternalLink, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,13 @@ import "leaflet/dist/leaflet.css";
 
 interface MapSectionProps {
   complexes: SportComplexData[];
+  selectedComplexId: string | null;
+  userLocation: Coordinates | null;
   onSelectComplex: (complex: SportComplexData) => void;
+  onViewDetails: (complex: SportComplexData) => void;
 }
+
+interface Coordinates { latitude: number; longitude: number; }
 
 interface MapLocation {
   complex: SportComplexData;
@@ -57,14 +62,33 @@ function FocusLocation({ location }: { location: MapLocation | null }) {
   return null;
 }
 
-export default function MapSection({ complexes, onSelectComplex }: MapSectionProps) {
+function FocusUserLocation({ userLocation }: { userLocation: Coordinates | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (userLocation) map.flyTo([userLocation.latitude, userLocation.longitude], 14, { duration: 0.45 });
+  }, [userLocation, map]);
+
+  return null;
+}
+
+export default function MapSection({ complexes, selectedComplexId, userLocation, onSelectComplex, onViewDetails }: MapSectionProps) {
   const locations = useMemo<MapLocation[]>(() => complexes.filter(isPublishedPosition).slice(0, 50).map((complex) => ({ complex, position: [Number(complex.latitude), Number(complex.longitude)] })), [complexes]);
-  const [selectedId, setSelectedId] = useState<string>(locations[0]?.complex.id ?? "");
+  const [selectedId, setSelectedId] = useState<string>(selectedComplexId ?? "");
   const selected = locations.find((location) => location.complex.id === selectedId) ?? null;
 
   useEffect(() => {
     if (!locations.some((location) => location.complex.id === selectedId)) setSelectedId(locations[0]?.complex.id ?? "");
   }, [locations, selectedId]);
+
+  useEffect(() => {
+    if (selectedComplexId && locations.some((location) => location.complex.id === selectedComplexId)) setSelectedId(selectedComplexId);
+  }, [locations, selectedComplexId]);
+
+  const selectLocation = (location: MapLocation) => {
+    setSelectedId(location.complex.id);
+    onSelectComplex(location.complex);
+  };
 
   if (locations.length === 0) return <NeighborhoodFallback complexes={complexes} />;
 
@@ -73,9 +97,11 @@ export default function MapSection({ complexes, onSelectComplex }: MapSectionPro
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <FitLocations locations={locations} />
       <FocusLocation location={selected} />
-      {locations.map((location) => <Marker key={location.complex.id} position={location.position} icon={markerIcon} title={location.complex.name} eventHandlers={{ click: () => setSelectedId(location.complex.id) }} />)}
+      <FocusUserLocation userLocation={userLocation} />
+      {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={9} pathOptions={{ color: "#1d4ed8", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 3 }}><Tooltip direction="top" offset={[0, -8]} opacity={1}>Tu ubicación</Tooltip></CircleMarker>}
+      {locations.map((location) => <Marker key={location.complex.id} position={location.position} icon={markerIcon} title={location.complex.name} eventHandlers={{ click: () => selectLocation(location) }} />)}
     </MapContainer>
-    <div className="absolute inset-x-3 top-3 z-[1000] flex gap-2 overflow-x-auto pb-1 sm:inset-x-auto sm:left-3 sm:right-3"><span className="shrink-0 rounded-full bg-background/95 px-3 py-2 text-xs font-medium shadow-sm backdrop-blur">{locations.length} ubicaciones publicadas</span>{locations.map((location) => <button key={location.complex.id} type="button" onClick={() => setSelectedId(location.complex.id)} aria-pressed={selectedId === location.complex.id} className="shrink-0 rounded-full border bg-background/95 px-3 py-2 text-left text-xs font-medium shadow-sm backdrop-blur transition-colors hover:border-primary aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground">{location.complex.name}</button>)}</div>
-    {selected && <div className="absolute bottom-3 left-3 right-3 z-[1000] rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:w-80"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{selected.complex.name}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{selected.complex.neighborhood || selected.complex.address}</p></div></div><Button size="sm" className="mt-3 w-full" onClick={() => onSelectComplex(selected.complex)}><ExternalLink className="mr-2 h-4 w-4" />Ver complejo</Button></div>}
+    <div className="absolute inset-x-3 top-3 z-[1000] flex gap-2 overflow-x-auto pb-1 sm:inset-x-auto sm:left-3 sm:right-3"><span className="shrink-0 rounded-full bg-background/95 px-3 py-2 text-xs font-medium shadow-sm backdrop-blur">{locations.length} ubicaciones publicadas</span>{locations.map((location) => <button key={location.complex.id} type="button" onClick={() => selectLocation(location)} aria-pressed={selectedId === location.complex.id} className="shrink-0 rounded-full border bg-background/95 px-3 py-2 text-left text-xs font-medium shadow-sm backdrop-blur transition-colors hover:border-primary aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground">{location.complex.name}</button>)}</div>
+    {selected && <div className="absolute bottom-3 left-3 right-3 z-[1000] rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:w-80"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{selected.complex.name}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{selected.complex.neighborhood || selected.complex.address}</p></div></div><Button size="sm" className="mt-3 w-full" onClick={() => onViewDetails(selected.complex)}><ExternalLink className="mr-2 h-4 w-4" />Ver complejo</Button></div>}
   </div>;
 }
