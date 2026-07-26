@@ -1,7 +1,6 @@
 // src/pages/RegisterComplex.tsx  (o donde esté tu componente)
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
-import usePlacesAutocomplete, { getGeocode, getLatLng } from "use-places-autocomplete";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,33 +119,9 @@ const RegisterComplex = () => {
     else setFormData({ ...formData, amenities: formData.amenities.filter(a => a !== amenity) });
   };
 
-  // -------------------------
-  // Places Autocomplete setup
-  // -------------------------
-  const {
-    ready,
-    value,
-    suggestions: { status, data },
-    setValue,
-    clearSuggestions
-  } = usePlacesAutocomplete({
-    debounce: 300,
-    requestOptions: {
-      componentRestrictions: { country: "ar" } // restringe a Argentina
-    }
-  });
-
-  const handleSelectAddress = async (address: string) => {
-    try {
-      setValue(address, false);
-      clearSuggestions();
-      // obtiene geocode y latlng
-      const results = await getGeocode({ address });
-      const { lat, lng } = await getLatLng(results[0]);
-      setFormData({ ...formData, address, latitude: lat, longitude: lng });
-    } catch {
-      toast({ title: "Error", description: "No se pudo obtener la ubicación exacta.", variant: "destructive" });
-    }
+  const updateCoordinate = (field: "latitude" | "longitude", value: string) => {
+    const coordinate = value.trim() === "" ? null : Number(value);
+    setFormData((current) => ({ ...current, [field]: Number.isFinite(coordinate) ? coordinate : null }));
   };
 
   // -------------------------
@@ -265,39 +240,14 @@ const RegisterComplex = () => {
                 <div>
                   <Label htmlFor="address">Dirección *</Label>
                   <div className="relative">
-                    <Input
-                      id="address"
-                      value={value}
-                      onChange={(e) => {
-                        setValue(e.target.value);
-                        // keep formData.address in sync only if user manual types AND we don't yet have lat/lng
-                        setFormData({ ...formData, address: e.target.value, latitude: null, longitude: null });
-                      }}
-                      placeholder="Escribí tu dirección y seleccioná una opción..."
-                      required
-                    />
-                    {/* Suggestions */}
-                    {status === "OK" && data.length > 0 && (
-                      <ul className="absolute left-0 right-0 bg-white border rounded mt-1 z-50 max-h-56 overflow-auto">
-                        {data.map(({ place_id, description }) => (
-                          <li
-                            key={place_id}
-                            className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
-                            onClick={() => handleSelectAddress(description)}
-                          >
-                            {description}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <Input id="address" value={formData.address} onChange={(event) => setFormData((current) => ({ ...current, address: event.target.value }))} placeholder="Ej: Av. El Éxodo 1234, San Salvador de Jujuy" required />
                   </div>
 
-                  {/* helper text showing if lat/lng captured */}
-                  {formData.latitude && formData.longitude ? (
-                    <div className="text-sm text-muted-foreground mt-2">Ubicación seleccionada: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}</div>
-                  ) : (
-                    <div className="text-sm text-muted-foreground mt-2">Seleccioná la dirección correcta desde las sugerencias para fijar la ubicación exacta.</div>
-                  )}
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div><Label htmlFor="latitude">Latitud *</Label><Input id="latitude" type="number" step="any" min="-90" max="90" value={formData.latitude ?? ""} onChange={(event) => updateCoordinate("latitude", event.target.value)} placeholder="-24.185800" required /></div>
+                    <div><Label htmlFor="longitude">Longitud *</Label><Input id="longitude" type="number" step="any" min="-180" max="180" value={formData.longitude ?? ""} onChange={(event) => updateCoordinate("longitude", event.target.value)} placeholder="-65.300400" required /></div>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground">Ingresá las coordenadas del complejo; se publicarán en el mapa una vez aprobado.</div>
                 </div>
 
                 <div>

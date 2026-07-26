@@ -133,7 +133,7 @@
       <h2>12. Radar de turnos y reserva guiada (23/07/2026)</h2>
       <p>El catálogo público organiza la búsqueda por deporte, zona, fecha y hora preferida en una URL compartible; muestra sólo atributos verificables del complejo y ofrece mapa con fallback por barrios.</p>
       <p>La reserva consume <code>get_bookable_slots(court_id, date)</code>, que entrega bloques sin exponer reservas de terceros. La confirmación sigue pasando exclusivamente por <code>create_reservation</code>, que recalcula importe y rechaza solapes.</p>
-      <p>La portada usa una hero propia, lista/mapa responsive y bloques de explicación y captación. Google Maps usa <code>VITE_GOOGLE_MAPS_API_KEY</code> restringida por origen y sólo dibuja coordenadas públicas reales; sin configuración muestra un fallback por barrios.</p>
+      <p>La portada usa una hero propia, lista/mapa responsive y bloques de explicación y captación. React Leaflet muestra teselas de OpenStreetMap sin claves y sólo dibuja coordenadas públicas reales; si el lote no tiene coordenadas válidas, usa un fallback por barrios. El alta registra dirección y coordenadas explícitas, sin geocodificación de Google. Ver evidencia: <a href="knowledge/changes/2026-07-26-openstreetmap-catalog-map.md">registro de cambio</a>.</p>
       <p>Ver evidencia: <a href="knowledge/changes/2026-07-23-radar-turnos-ui-ux.md">registro de cambio</a>. La migración requiere pruebas de RLS y concurrencia en staging.</p>
     </section>
     <section id="accessible-contrast-system">
