@@ -84,7 +84,7 @@ function MapUnavailable({ reason }: { reason: string }) {
 
 export default function MapSection({ complexes, onSelectComplex }: MapSectionProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY?.trim();
-  const locations = useMemo<MapLocation[]>(() => complexes.filter(isPublishedPosition).map((complex) => ({ complex, position: { lat: Number(complex.latitude), lng: Number(complex.longitude) } })), [complexes]);
+  const locations = useMemo<MapLocation[]>(() => complexes.filter(isPublishedPosition).slice(0, 50).map((complex) => ({ complex, position: { lat: Number(complex.latitude), lng: Number(complex.longitude) } })), [complexes]);
 
   if (!apiKey) {
     return <MapUnavailable reason="El mapa se habilita al configurar la clave pública de Google Maps. Mientras tanto, explorá los complejos por barrio." />;

@@ -161,6 +161,16 @@
       <p>El frontend no imprime sesiones, tokens de proveedor, reservas, archivos, URLs de Storage ni payloads en la consola. Los errores recuperables se muestran con mensajes genéricos para el usuario sin revelar detalles internos.</p>
       <p>La edición de canchas persiste <code>sport</code> y aborta el guardado si una actualización o carga de imagen falla; no confirma cambios parciales como exitosos. Ver evidencia: <a href="knowledge/changes/2026-07-23-client-session-log-safety.md">registro de cambio</a>.</p>
     </section>
+    <section id="google-football-import">
+      <h2>18. Importación de complejos de fútbol desde Google Maps (25/07/2026)</h2>
+      <p><code>scripts/import_google_football_complexes.py</code> interpreta el export XLSX, extrae coordenadas desde enlaces de Google Maps y crea borradores idempotentes sin propietario. Para el editor SQL web está disponible <code>supabase/imports/20260725_google_football_complexes.sql</code>, sin credenciales ni perfiles embebidos.</p>
+      <p>La migración permite <code>owner_id=null</code>; sólo <code>assign_complex_owner</code>, administrada en base, puede asociar luego un perfil owner. No infiere datos de canchas ni publica resultados. Cuando no hay calle, conserva un localizador explícito por coordenadas y filtra sólo categorías inequívocamente ajenas o duplicados. Ver evidencia: <a href="knowledge/changes/2026-07-25-google-football-complex-import.md">registro de cambio</a>.</p>
+    </section>
+    <section id="catalog-sports-discovery-filter">
+      <h2>19. Deportes de catálogo para descubrimiento (25/07/2026)</h2>
+      <p><code>sport_complexes.catalog_sports</code> permite clasificar complejos importados sin crear canchas ficticias. La portada lo combina con <code>sport_courts.sport</code> para filtrar por deporte.</p>
+      <p>Los atributos de reserva, precio, capacidad, techo, iluminación y horario siguen siendo exclusivos de una cancha verificada. Ver evidencia: <a href="knowledge/changes/2026-07-25-catalog-sports-discovery-filter.md">registro de cambio</a>.</p>
+    </section>
   </main>
 </body>
 </html>

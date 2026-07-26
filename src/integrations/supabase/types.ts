@@ -211,6 +211,7 @@ export type Database = {
         Row: {
           address: string
           amenities: string[] | null
+          catalog_sports: Database["public"]["Enums"]["sport_type"][]
           created_at: string
           description: string | null
           email: string | null
@@ -222,7 +223,7 @@ export type Database = {
           name: string
           neighborhood: string | null
           opening_hours: Json | null
-          owner_id: string
+          owner_id: string | null
           payment_status: string | null
           phone: string | null
           photos: string[] | null
@@ -234,6 +235,7 @@ export type Database = {
         Insert: {
           address: string
           amenities?: string[] | null
+          catalog_sports?: Database["public"]["Enums"]["sport_type"][]
           created_at?: string
           description?: string | null
           email?: string | null
@@ -245,7 +247,7 @@ export type Database = {
           name: string
           neighborhood?: string | null
           opening_hours?: Json | null
-          owner_id: string
+          owner_id?: string | null
           payment_status?: string | null
           phone?: string | null
           photos?: string[] | null
@@ -257,6 +259,7 @@ export type Database = {
         Update: {
           address?: string
           amenities?: string[] | null
+          catalog_sports?: Database["public"]["Enums"]["sport_type"][]
           created_at?: string
           description?: string | null
           email?: string | null
@@ -268,7 +271,7 @@ export type Database = {
           name?: string
           neighborhood?: string | null
           opening_hours?: Json | null
-          owner_id?: string
+          owner_id?: string | null
           payment_status?: string | null
           phone?: string | null
           photos?: string[] | null
@@ -419,6 +422,10 @@ export type Database = {
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      assign_complex_owner: {
+        Args: { p_complex_id: string; p_owner_profile_id: string }
+        Returns: Database["public"]["Tables"]["sport_complexes"]["Row"]
       }
     }
     Enums: {

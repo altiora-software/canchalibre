@@ -1,0 +1,88 @@
+-- Initial complex catalog import from basquet.xlsx
+-- Inserts unowned drafts and is safe to rerun.
+BEGIN;
+ALTER TABLE public.sport_complexes ALTER COLUMN owner_id DROP NOT NULL;
+WITH source_complexes (name, address, latitude, longitude, phone, description) AS (
+VALUES
+  (U&'Cancha de Basquet - Parque San Mart\00EDn', U&'Av. Espa\00F1a 2000-1970', -24.1819349, -65.3182788, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Federaci\00F3n de B\00E1squetbol', U&'Gral. Alvear 1500', -24.184269, -65.3131527, NULL, U&'Imported from Google Maps basketball search. Source category: Instalaciones deportivas.'),
+  (U&'Campo de Deportes RIM 20', U&'Google Maps coordinates: -24.1805929, -65.3185600', -24.1805929, -65.31856, NULL, U&'Imported from Google Maps basketball search. Source category: Polideportivo.'),
+  (U&'Club Villa San Mart\00EDn', U&'Av. Juncal', -24.1797422, -65.3096501, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Cancha De Basquet', U&'Google Maps coordinates: -24.1838104, -65.2943354', -24.1838104, -65.2943354, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Atl\00E9tico Cuyaya', U&'Av. Jos\00E9 de la Iglesia 2042', -24.1913042, -65.3172835, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Club Sirio Libanesa', U&'Gral. Lamadrid 560', -24.1823778, -65.3072378, U&'0388 423-3506', U&'Imported from Google Maps basketball search. Source category: Centro deportivo.'),
+  (U&'Cancha De B\00E1squet', U&'Unnamed Road', -24.1707193, -65.2908364, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Atletico Gorriti', U&'Av. Pueyrred\00F3n', -24.1958084, -65.2949905, U&'0388 423-6832', U&'Imported from Google Maps basketball search. Source category: Centro deportivo.'),
+  (U&'Club Gorriti', U&'Av. El Exodo 294-234', -24.1960564, -65.295424, NULL, U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Club Deportivo Lujan', U&'Tumusla 795', -24.2002882, -65.2937116, U&'0388 464-4480', U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Coquena F.C', U&'Ing, Dr. Scaro 166', -24.1806257, -65.2874961, U&'0388 421-2490', U&'Imported from Google Maps basketball search. Source category: Campo de f\00FAtbol.'),
+  (U&'Polideportivo B\00B0 "Kenedy"', U&'Formosa', -24.2032625, -65.297322, NULL, U&'Imported from Google Maps basketball search. Source category: Centro deportivo.'),
+  (U&'Club Deportivo Alberdi', U&'Calle Alberdi', -24.2049022, -65.2720308, U&'0388 576-6297', U&'Imported from Google Maps basketball search. Source category: Club de f\00FAtbol.'),
+  (U&'Patinodromo de Coronel Arias', U&'Monteagudo 1371', -24.2059306, -65.2856154, NULL, U&'Imported from Google Maps basketball search. Source category: Deportes.'),
+  (U&'Cancha de B\00E1squet', U&'C. 187 2032', -24.241158, -65.255926, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Social y Deportivo Comercio Alto Comedero', U&'Avenida Ingeniero Carlos Snopek, Av. Forestal esquina', -24.2446314, -65.2616403, U&'0388 601-7685', U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Cancha De Hipotecario', U&'Google Maps coordinates: -24.2369082, -65.2617663', -24.2369082, -65.2617663, NULL, U&'Imported from Google Maps basketball search. Source category: Campo de f\00FAtbol.'),
+  (U&'Asociaci\00F3n Cultural y Deportiva Altos Hornos Zapla', U&'Google Maps coordinates: -24.2574257, -65.2111369', -24.2574257, -65.2111369, U&'0388 427-1843', U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Cancha 9 de Julio', U&'Google Maps coordinates: -24.2590472, -65.2066422', -24.2590472, -65.2066422, NULL, U&'Imported from Google Maps basketball search. Source category: Polideportivo.'),
+  (U&'ABP PALPALA', U&'Mina la Casualidad', -24.2675884, -65.2070425, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo de Belgrano', U&'Google Maps coordinates: -24.2480238, -65.2060039', -24.2480238, -65.2060039, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo 40 Vivienda Adep', U&'Google Maps coordinates: -24.2704844, -65.1951439', -24.2704844, -65.1951439, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Centro de Ingenieros de Jujuy - Predio San Pablo de Reyes', U&'Ruta Nacional 9 Choquevilca N\00B0 940', -24.1429628, -65.3933934, U&'0388 514-6445', U&'Imported from Google Maps basketball search. Source category: Centro comunitario.'),
+  (U&'Cancha de b\00E1squet Lozano', U&'Av. Hip\00F3lito Yrigoyen', -24.0811981, -65.4048826, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo Comunal Lozano', U&'Google Maps coordinates: -24.0812627, -65.4048773', -24.0812627, -65.4048773, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Sportivo Rivadavia', U&'Google Maps coordinates: -24.3864678, -65.2714229', -24.3864678, -65.2714229, NULL, U&'Imported from Google Maps basketball search. Source category: Instalaciones deportivas.'),
+  (U&'Polideportivo Barrio Mar\00EDa', U&'Av. Juan Manuel de Rosas', -24.389221, -65.255356, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo Nuestra Se\00F1ora Del Carmen', U&'Y4603ANN, Av. Hip\00F3lito Yrigoyen 375', -24.3877545, -65.2555127, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo Municipal de Volcan', U&'Bernardino Rivadavia 199-101', -23.9171602, -65.465573, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'NEWCON Perico en b. La Paz', U&'Colombia, Guatemala &', -24.392669, -65.113719, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Cancha de Basquet', U&'Google Maps coordinates: -24.3876797, -65.1092365', -24.3876797, -65.1092365, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Cancha de B\00E1squet', U&'Los Lirios 498', -24.387942, -65.1117225, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Cancha de basquet Hip\00F3lito Yrigoyen', U&'B\00BA Hip\00F3lito Yrigoyen', -24.3189399, -64.9686343, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'El Gallinero', U&'Google Maps coordinates: -24.3121312, -64.9651633', -24.3121312, -64.9651633, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo Miguel Angel Aquino', U&'Sta. Cruz', -24.2210505, -64.8637054, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Atl\00E9tico Belgrano Predio Basquet', U&'Ameghino 551', -24.6687531, -65.0439711, NULL, U&'Imported from Google Maps basketball search. Source category: Club social.'),
+  (U&'Cancha Barrio Col\00F3n', U&'Google Maps coordinates: -24.3175792, -64.9700405', -24.3175792, -64.9700405, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Cancha De B\00E1squet', U&'Google Maps coordinates: -23.9446381, -64.8026238', -23.9446381, -64.8026238, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Complejo Casta\00F1ares Volley y Basquet', U&'Google Maps coordinates: -24.7333530, -65.4022866', -24.733353, -65.4022866, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Club de b\00E1squet 9 de Julio Salta Capital', U&'Urquiza 1024', -24.7914916, -65.417038, U&'0387 471-9265', U&'Imported from Google Maps basketball search. Source category: Club de baloncesto.'),
+  (U&'Club Sargento Cabral', U&'Santiago del Estero 1644-1698', -24.7838255, -65.4250777, NULL, U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Cancha De Basquet San Cayetano', U&'Google Maps coordinates: -23.9386995, -64.8032920', -23.9386995, -64.803292, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Villa Crespo', U&'Google Maps coordinates: -24.2273817, -64.8375955', -24.2273817, -64.8375955, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Complejo Deportivo Esc. Tecnica (ETHA)', U&'Av. Ant\00E1rtida Argentina', -23.8082851, -64.7884474, NULL, U&'Imported from Google Maps basketball search. Source category: Estadio.'),
+  (U&'Red Comunitaria Zona Norte', U&'Dr. Humberto Canepa', -24.7334502, -65.4021417, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Deportivo General Paz', U&'San Juan 1550', -24.7950758, -65.4248167, NULL, U&'Imported from Google Maps basketball search. Source category: Club de baloncesto.'),
+  (U&'Club Social Cultural y Deportivo Grand Bourg', U&'Figueroa Alcorta 997', -24.7767521, -65.4450482, U&'0387 471-9394', U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Club Atl\00E9tico Pe\00F1arol', U&'Anzo\00E1tegui 103', -24.7729876, -65.4023687, NULL, U&'Imported from Google Maps basketball search. Source category: Club de f\00FAtbol.'),
+  (U&'Cancha De Los Pitufos', U&'Jacaranda', -23.810006, -64.7935636, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Cancha de Basquet', U&'Google Maps coordinates: -24.2421734, -64.8639468', -24.2421734, -64.8639468, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Polideportivo B\00B0 Viviendas', U&'Google Maps coordinates: -23.6325622, -65.4125705', -23.6325622, -65.4125705, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'La VIlla M\00E1s Grande', U&'J. A. Fern\00E1ndez 975', -24.8032706, -65.3994049, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Club Gimnasia y Tiro', U&'Vicente L\00F3pez 670', -24.7819603, -65.4046951, U&'0387 432-0554', U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Club Providencia.', U&'Google Maps coordinates: -24.2138589, -64.8572538', -24.2138589, -64.8572538, U&'03888 52-9198', U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Club Cultural y Deportivo Ingeniero Herminio Arrieta (CCDIHA)', U&'Jujuy', -23.8111502, -64.7889945, NULL, U&'Imported from Google Maps basketball search. Source category: Club de f\00FAtbol.'),
+  (U&'Estadio El Gigante del Norte', U&'Vicente L\00F3pez 670', -24.7831951, -65.4041839, NULL, U&'Imported from Google Maps basketball search. Source category: Estadio.'),
+  (U&'Escuela de B\00E1squet JC', U&'Av. del Bicentenario de la Batalla de Salta 1600', -24.7677879, -65.3973388, U&'0387 571-5830', U&'Imported from Google Maps basketball search. Source category: Escuela deportiva.'),
+  (U&'Complejo Miguel Ortiz', U&'De\00E1n Funes 2599-2699', -24.7562672, -65.4086825, NULL, U&'Imported from Google Maps basketball search. Source category: Polideportivo.'),
+  (U&'Cancha I.E.M.', U&'Google Maps coordinates: -24.7261690, -65.4056427', -24.726169, -65.4056427, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de f\00FAtbol sala.'),
+  (U&'Canchas de B\00E1squet DELMI', U&'O'' Higgins 1486', -24.7756275, -65.4217986, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Complejo Deportivo Nicolas Vitale', U&'Diario la Razon 4400', -24.8452719, -65.4422042, U&'0387 424-0048', U&'Imported from Google Maps basketball search. Source category: Polideportivo.'),
+  (U&'Club Los Cachorros', U&'Roberto Romero, RN51 S/N Km 2,6', -24.8428873, -65.4566774, U&'03873 21-3275', U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Estadio Polideportivo Salta Polideportivo Delmi', U&'Ibazeta 1550', -24.776026, -65.4228118, U&'0387 431-3651', U&'Imported from Google Maps basketball search. Source category: Centro deportivo.'),
+  (U&'Mini Canchas de F\00FAtbol y Basquet.', U&'998, Ibazeta 900', -24.7768686, -65.4230462, NULL, U&'Imported from Google Maps basketball search. Source category: Campo de f\00FAtbol.'),
+  (U&'Club San Mart\00EDn', U&'Republica de Siria 49 1er piso', -24.7879751, -65.4277882, NULL, U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Popeye Beisbol Club', U&'Av. Gral. Arenales 960', -24.770366, -65.414021, U&'0387 431-1881', U&'Imported from Google Maps basketball search. Source category: Campo de b\00E9isbol.'),
+  (U&'Club Araoz', U&'Radio Col\00F3n 2514', -24.8405586, -65.4472286, NULL, U&'Imported from Google Maps basketball search. Source category: Gimnasio.'),
+  (U&'Uni\00F3n Sirio Libanesa - Predio Ing. Batule', U&'RP28', -24.7150215, -65.4232956, U&'0387 422-1299', U&'Imported from Google Maps basketball search. Source category: Club.'),
+  (U&'Club San Mart\00EDn', U&'Av. San Mart\00EDn 2230', -24.7915333, -65.4343524, U&'0387 434-0235', U&'Imported from Google Maps basketball search. Source category: Club de f\00FAtbol.'),
+  (U&'Canchas Club Barrio Universitario', U&'Google Maps coordinates: -24.7373705, -65.3957866', -24.7373705, -65.3957866, NULL, U&'Imported from Google Maps basketball search. Source category: Club deportivo.'),
+  (U&'Cancha de baloncesto p\00FAblica', U&'Yerbal 835', -34.6191386, -58.4427729, NULL, U&'Imported from Google Maps basketball search. Source category: Cancha de baloncesto.'),
+  (U&'Complejo Municipal San Jos\00E9 de los Cerrillos', U&'Av. Gral. G\00FCemes 400 548', -24.9061425, -65.4874856, NULL, U&'Imported from Google Maps basketball search. Source category: Polideportivo.')
+)
+INSERT INTO public.sport_complexes (owner_id, name, address, latitude, longitude, phone, description, catalog_sports, is_active, is_approved, payment_status)
+SELECT NULL, source.name, source.address, source.latitude, source.longitude, source.phone, source.description, ARRAY['basquet']::public.sport_type[], false, false, 'pending'
+FROM source_complexes AS source
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.sport_complexes AS existing
+  WHERE existing.name = source.name AND existing.latitude = source.latitude AND existing.longitude = source.longitude
+);
+COMMIT;

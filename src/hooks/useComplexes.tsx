@@ -1,5 +1,5 @@
 // src/hooks/useComplexes.ts
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface CourtData {
@@ -24,6 +24,7 @@ export interface SportComplexData {
   website?: string | null;
   photos: string[];
   amenities: string[];
+  catalog_sports: string[];
   opening_hours?: unknown;
   is_active: boolean;
   is_approved: boolean;
@@ -36,10 +37,15 @@ export interface SportComplexData {
   courts?: CourtData[];
 }
 
-export const useComplexes = (_userId: string | null = null, _isOwner = false) => {
+const PAGE_SIZE = 50;
+
+export const useComplexes = (_userId: string | null = null, _isOwner = false, catalogSport?: string) => {
   const [complexes, setComplexes] = useState<SportComplexData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const offsetRef = useRef(0);
 
   const shape = (row: any): SportComplexData => ({
     id: row.id,
@@ -52,6 +58,7 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
     website: row.website ?? null,
     photos: row.photos ?? [],
     amenities: row.amenities ?? [],
+    catalog_sports: row.catalog_sports ?? [],
     opening_hours: row.opening_hours,
     is_active: row.is_active,
     is_approved: row.is_approved,
@@ -64,14 +71,19 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
     courts: (row.sport_courts ?? []) as CourtData[],
   });
 
-  const fetchComplexes = async () => {
+  const fetchComplexes = useCallback(async (reset = true) => {
     try {
-      setLoading(true);
+      if (reset) {
+        setLoading(true);
+        offsetRef.current = 0;
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
   
       // La tabla aplica RLS para complejos activos/aprobados. Pedimos una
       // lista explícita para no enviar teléfonos, WhatsApp ni email al catálogo.
-      const { data, error } = await supabase
+      let query = supabase
         .from('sport_complexes')
         .select(`
           id,
@@ -83,6 +95,7 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
           longitude,
           photos,
           amenities,
+          catalog_sports,
           opening_hours,
           is_active,
           is_approved,
@@ -98,17 +111,29 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
             has_roof,
             is_active
           )
-        `);
+        `)
+        .order('name', { ascending: true })
+        .range(offsetRef.current, offsetRef.current + PAGE_SIZE - 1);
+
+      if (catalogSport && catalogSport !== 'todos') {
+        query = query.contains('catalog_sports', [catalogSport === 'padel' ? 'padle' : catalogSport]);
+      }
+
+      const { data, error } = await query;
   
       if (error) throw error;
       // mapear/normalizar como tu shape original
-      setComplexes((data ?? []).map(shape));
+      const next = (data ?? []).map(shape);
+      setComplexes((current) => reset ? next : [...current, ...next.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      offsetRef.current += next.length;
+      setHasMore(next.length === PAGE_SIZE);
     } catch (e: any) {
       setError(e.message ?? 'Error fetching complexes');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  };
+  }, [catalogSport]);
   
 
   const fetchOwnerComplexes = async (userId: string) => {
@@ -151,7 +176,11 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false) =>
   };
   
 
-  useEffect(() => { fetchComplexes(); }, []);
+  useEffect(() => { void fetchComplexes(true); }, [fetchComplexes]);
 
-  return { complexes, loading, error, refetch: fetchComplexes, fetchOwnerComplexes };
+  const loadMore = useCallback(async () => {
+    if (!loading && !loadingMore && hasMore) await fetchComplexes(false);
+  }, [fetchComplexes, hasMore, loading, loadingMore]);
+
+  return { complexes, loading, loadingMore, hasMore, error, refetch: () => fetchComplexes(true), loadMore, fetchOwnerComplexes };
 };
