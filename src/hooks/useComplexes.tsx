@@ -11,11 +11,13 @@ export interface CourtData {
   has_lighting: boolean | null;
   has_roof: boolean | null;
   hourly_price?: number | null;
+  is_active?: boolean | null;
 }
 
 export interface SportComplexData {
   id: string;
   name: string;
+  description?: string | null;
   address: string;
   neighborhood: string | null;
   phone: string | null;
@@ -39,6 +41,28 @@ export interface SportComplexData {
 
 const PAGE_SIZE = 50;
 
+const shapePublicComplex = (row: any): SportComplexData => ({
+  id: row.id,
+  name: row.name,
+  description: row.description ?? null,
+  address: row.address,
+  neighborhood: row.neighborhood ?? null,
+  phone: row.phone ?? null,
+  whatsapp: row.whatsapp ?? null,
+  email: row.email ?? null,
+  website: row.website ?? null,
+  photos: row.photos ?? [],
+  amenities: row.amenities ?? [],
+  catalog_sports: row.catalog_sports ?? [],
+  opening_hours: row.opening_hours,
+  is_active: row.is_active,
+  is_approved: row.is_approved,
+  payment_status: row.payment_status ?? "unknown",
+  latitude: typeof row.latitude === 'number' ? row.latitude : (row.latitude ? Number(row.latitude) : null),
+  longitude: typeof row.longitude === 'number' ? row.longitude : (row.longitude ? Number(row.longitude) : null),
+  courts: (row.sport_courts ?? []) as CourtData[],
+});
+
 export const useComplexes = (_userId: string | null = null, _isOwner = false, catalogSport?: string) => {
   const [complexes, setComplexes] = useState<SportComplexData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,30 +70,6 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false, ca
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const offsetRef = useRef(0);
-
-  const shape = (row: any): SportComplexData => ({
-    id: row.id,
-    name: row.name,
-    address: row.address,
-    neighborhood: row.neighborhood ?? null,
-    phone: row.phone ?? null,
-    whatsapp: row.whatsapp ?? null,
-    email: row.email ?? null,
-    website: row.website ?? null,
-    photos: row.photos ?? [],
-    amenities: row.amenities ?? [],
-    catalog_sports: row.catalog_sports ?? [],
-    opening_hours: row.opening_hours,
-    is_active: row.is_active,
-    is_approved: row.is_approved,
-    payment_status: row.payment_status ?? "unknown",
-
-    // asegura number | null
-    latitude: typeof row.latitude === 'number' ? row.latitude : (row.latitude ? Number(row.latitude) : null),
-    longitude: typeof row.longitude === 'number' ? row.longitude : (row.longitude ? Number(row.longitude) : null),
-
-    courts: (row.sport_courts ?? []) as CourtData[],
-  });
 
   const fetchComplexes = useCallback(async (reset = true) => {
     try {
@@ -123,7 +123,7 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false, ca
   
       if (error) throw error;
       // mapear/normalizar como tu shape original
-      const next = (data ?? []).map(shape);
+      const next = (data ?? []).map(shapePublicComplex);
       setComplexes((current) => reset ? next : [...current, ...next.filter((item) => !current.some((existing) => existing.id === item.id))]);
       offsetRef.current += next.length;
       setHasMore(next.length === PAGE_SIZE);
@@ -161,7 +161,7 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false, ca
   
       if (error) throw error;
   
-      const normalized = (data ?? []).map(shape);
+      const normalized = (data ?? []).map(shapePublicComplex);
       setComplexes(normalized);
   
       // también devolvemos los datos por si quien llama quiere usarlos
@@ -183,4 +183,80 @@ export const useComplexes = (_userId: string | null = null, _isOwner = false, ca
   }, [fetchComplexes, hasMore, loading, loadingMore]);
 
   return { complexes, loading, loadingMore, hasMore, error, refetch: () => fetchComplexes(true), loadMore, fetchOwnerComplexes };
+};
+
+/**
+ * Loads one public complex independently from the catalog pagination. The select
+ * deliberately mirrors the public catalog fields and excludes contact data.
+ */
+export const usePublicComplex = (complexId: string | undefined) => {
+  const [complex, setComplex] = useState<SportComplexData | null>(null);
+  const [loading, setLoading] = useState(Boolean(complexId));
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!complexId) {
+      setComplex(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const fetchComplex = async () => {
+      const { data, error: queryError } = await supabase
+        .from('sport_complexes')
+        .select(`
+        id,
+        name,
+        description,
+        address,
+        neighborhood,
+        latitude,
+        longitude,
+        photos,
+        amenities,
+        catalog_sports,
+        opening_hours,
+        is_active,
+        is_approved,
+        payment_status,
+        sport_courts: sport_courts (
+          id,
+          name,
+          sport,
+          players_capacity,
+          surface_type,
+          hourly_price,
+          has_lighting,
+          has_roof,
+          is_active
+        )
+        `)
+        .eq('id', complexId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (queryError) {
+        setError(queryError.message);
+        setComplex(null);
+      } else {
+        setComplex(data ? shapePublicComplex(data) : null);
+      }
+    };
+
+    void fetchComplex()
+      .catch((queryError: Error) => {
+        if (!cancelled) {
+          setError(queryError.message);
+          setComplex(null);
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [complexId]);
+
+  return { complex, loading, error };
 };

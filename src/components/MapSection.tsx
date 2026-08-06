@@ -24,8 +24,8 @@ interface MapLocation {
 }
 
 const JUJUY_CENTER: [number, number] = [-24.1858, -65.3004];
-const markerIcon = divIcon({
-  className: "cancha-libre-map-marker",
+const createMarkerIcon = (selected: boolean) => divIcon({
+  className: `cancha-libre-map-marker${selected ? " is-selected" : ""}`,
   html: '<span aria-hidden="true"></span>',
   iconSize: [28, 28],
   iconAnchor: [14, 14],
@@ -56,7 +56,7 @@ function FocusLocation({ location }: { location: MapLocation | null }) {
   const map = useMap();
 
   useEffect(() => {
-    if (location) map.flyTo(location.position, Math.max(map.getZoom(), 15), { duration: 0.45 });
+    if (location) map.flyTo(location.position, Math.max(map.getZoom(), 15), { duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.45 });
   }, [location, map]);
 
   return null;
@@ -66,7 +66,7 @@ function FocusUserLocation({ userLocation }: { userLocation: Coordinates | null 
   const map = useMap();
 
   useEffect(() => {
-    if (userLocation) map.flyTo([userLocation.latitude, userLocation.longitude], 14, { duration: 0.45 });
+    if (userLocation) map.flyTo([userLocation.latitude, userLocation.longitude], 14, { duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 0.45 });
   }, [userLocation, map]);
 
   return null;
@@ -92,16 +92,16 @@ export default function MapSection({ complexes, selectedComplexId, userLocation,
 
   if (locations.length === 0) return <NeighborhoodFallback complexes={complexes} />;
 
-  return <div className="relative h-[420px] overflow-hidden rounded-2xl border bg-muted shadow-sm lg:h-[560px]">
+  return <div className="relative h-[56vh] min-h-[460px] overflow-hidden rounded-2xl border bg-muted shadow-sm xl:h-full">
     <MapContainer center={JUJUY_CENTER} zoom={13} scrollWheelZoom className="h-full w-full" aria-label="Mapa de complejos deportivos">
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <FitLocations locations={locations} />
       <FocusLocation location={selected} />
       <FocusUserLocation userLocation={userLocation} />
       {userLocation && <CircleMarker center={[userLocation.latitude, userLocation.longitude]} radius={9} pathOptions={{ color: "#1d4ed8", fillColor: "#3b82f6", fillOpacity: 0.9, weight: 3 }}><Tooltip direction="top" offset={[0, -8]} opacity={1}>Tu ubicación</Tooltip></CircleMarker>}
-      {locations.map((location) => <Marker key={location.complex.id} position={location.position} icon={markerIcon} title={location.complex.name} eventHandlers={{ click: () => selectLocation(location) }} />)}
+      {locations.map((location) => <Marker key={location.complex.id} position={location.position} icon={createMarkerIcon(location.complex.id === selectedId)} title={`${location.complex.name}${location.complex.id === selectedId ? ", seleccionado" : ""}`} keyboard eventHandlers={{ click: () => selectLocation(location), keypress: () => selectLocation(location) }} />)}
     </MapContainer>
-    <div className="absolute inset-x-3 top-3 z-[1000] flex gap-2 overflow-x-auto pb-1 sm:inset-x-auto sm:left-3 sm:right-3"><span className="shrink-0 rounded-full bg-background/95 px-3 py-2 text-xs font-medium shadow-sm backdrop-blur">{locations.length} ubicaciones publicadas</span>{locations.map((location) => <button key={location.complex.id} type="button" onClick={() => selectLocation(location)} aria-pressed={selectedId === location.complex.id} className="shrink-0 rounded-full border bg-background/95 px-3 py-2 text-left text-xs font-medium shadow-sm backdrop-blur transition-colors hover:border-primary aria-[pressed=true]:border-primary aria-[pressed=true]:bg-primary aria-[pressed=true]:text-primary-foreground">{location.complex.name}</button>)}</div>
-    {selected && <div className="absolute bottom-3 left-3 right-3 z-[1000] rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:w-80"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{selected.complex.name}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{selected.complex.neighborhood || selected.complex.address}</p></div></div><Button size="sm" className="mt-3 w-full" onClick={() => onViewDetails(selected.complex)}><ExternalLink className="mr-2 h-4 w-4" />Ver complejo</Button></div>}
+    <div className="absolute left-3 top-3 z-[1000] rounded-lg border bg-background/95 px-3 py-2 text-xs font-medium shadow-sm backdrop-blur"><span aria-hidden="true">●</span> {locations.length} ubicaciones · Tocá un marcador para ver su ficha</div>
+    {selected && <div className="absolute bottom-3 left-3 right-3 z-[1000] rounded-xl border-2 border-emerald-700 bg-background/95 p-3 shadow-lg backdrop-blur sm:left-auto sm:w-80"><div className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><div className="min-w-0"><p className="truncate text-sm font-semibold">{selected.complex.name}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{selected.complex.neighborhood || selected.complex.address}</p><p className="mt-1 text-xs font-medium text-emerald-800 dark:text-emerald-200">Seleccionado en el listado</p></div></div><Button size="sm" className="mt-3 w-full" onClick={() => onViewDetails(selected.complex)}><ExternalLink className="mr-2 h-4 w-4" />Ver complejo</Button></div>}
   </div>;
 }

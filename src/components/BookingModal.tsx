@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Calendar as CalendarIcon, Check, ChevronLeft, Clock, CreditCard, Loader2, Smartphone } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,7 @@ const formatCurrency = (amount: number | null | undefined) =>
 const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
   const { toast } = useToast();
   const { createReservation, fetchBookableSlots } = useReservations();
-  const activeCourts = useMemo(() => complex.courts?.filter((court) => court.id) ?? [], [complex.courts]);
+  const activeCourts = useMemo(() => complex.courts?.filter((court) => court.id && court.is_active !== false) ?? [], [complex.courts]);
   const [step, setStep] = useState(1);
   const [selectedCourtId, setSelectedCourtId] = useState('');
   const [selectedDate, setSelectedDate] = useState<Date>();
@@ -143,25 +143,32 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
+          <p className="text-xs font-semibold uppercase tracking-[.14em] text-primary">Solicitud de reserva</p>
           <DialogTitle>Reservar en {complex.name}</DialogTitle>
-          <p className="text-sm text-muted-foreground">Tu turno se reserva al confirmar. El pago se coordina con el complejo.</p>
+          <DialogDescription>La disponibilidad y el importe final se validan al confirmar. El pago se coordina con el complejo.</DialogDescription>
         </DialogHeader>
 
         <ol className="grid grid-cols-3 gap-2 text-sm" aria-label="Progreso de reserva">
           {['Cancha', 'Día y hora', 'Confirmar'].map((label, index) => {
             const current = index + 1;
-            return <li key={label} className={`rounded-md px-3 py-2 text-center ${step >= current ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{current}. {label}</li>;
+            return <li key={label} aria-current={step === current ? 'step' : undefined} className={`rounded-md px-3 py-2 text-center ${step >= current ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>{current}. {label}</li>;
           })}
         </ol>
+
+        <aside className="rounded-xl border border-border bg-muted/40 p-4 text-sm" aria-label="Resumen persistente de la reserva">
+          <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Tu selección</h2><Badge variant="outline">Paso {step} de 3</Badge></div>
+          <dl className="mt-3 grid gap-3 sm:grid-cols-3"><div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Cancha</dt><dd className="mt-1 font-medium">{selectedCourt?.name ?? 'Pendiente'}</dd></div><div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Día y hora</dt><dd className="mt-1 font-medium">{selectedDate ? selectedDate.toLocaleDateString('es-AR') : 'Pendiente'}{selectedSlot ? ` · ${formatTime(selectedSlot.start_time)}` : ''}</dd></div><div><dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Precio publicado</dt><dd className="mt-1 font-medium">{selectedCourt ? `Desde ${formatCurrency(selectedCourt.hourly_price)}` : 'Pendiente'}</dd></div></dl>
+          <p className="mt-3 text-xs text-muted-foreground">El total y la seña, si corresponden, se calculan en el servidor.</p>
+        </aside>
 
         {step === 1 && (
           <section className="space-y-3" aria-labelledby="court-heading">
             <div><h2 id="court-heading" className="font-semibold">Elegí una cancha</h2><p className="text-sm text-muted-foreground">Mostramos sólo canchas activas del complejo.</p></div>
             <div className="grid gap-3 sm:grid-cols-2">
               {activeCourts.map((court) => (
-                <button type="button" key={court.id} onClick={() => selectCourt(court.id)} className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedCourtId === court.id ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}`}>
+                <button type="button" key={court.id} onClick={() => selectCourt(court.id)} aria-pressed={selectedCourtId === court.id} className={`min-h-28 rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedCourtId === court.id ? 'border-primary bg-primary/5' : 'hover:border-primary/50'}`}>
                   <div className="flex items-start justify-between gap-2"><span className="font-semibold">{court.name}</span>{selectedCourtId === court.id && <Check className="h-5 w-5 text-primary" aria-label="Seleccionada" />}</div>
                   <p className="mt-1 text-sm text-muted-foreground">{court.sport} · {court.players_capacity} jugadores</p>
                   <p className="mt-2 text-sm">Desde {formatCurrency(court.hourly_price)} / hora</p>
@@ -182,7 +189,7 @@ const BookingModal = ({ complex, isOpen, onClose }: BookingModalProps) => {
               {!slotsLoading && !slotsError && !slots.length && <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">No hay turnos publicados para esta fecha. Probá otro día o contactá al complejo.</p>}
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{slots.map((slot) => {
                 const selected = selectedSlot?.start_time === slot.start_time && selectedSlot?.end_time === slot.end_time;
-                return <Button key={`${slot.start_time}-${slot.end_time}`} type="button" variant={selected ? 'default' : 'outline'} onClick={() => setSelectedSlot(slot)}>{formatTime(slot.start_time)}</Button>;
+                return <Button key={`${slot.start_time}-${slot.end_time}`} type="button" aria-pressed={selected} variant={selected ? 'default' : 'outline'} onClick={() => setSelectedSlot(slot)}>{formatTime(slot.start_time)}</Button>;
               })}</div>
             </div>}
           </section>

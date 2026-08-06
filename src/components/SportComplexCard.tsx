@@ -1,33 +1,35 @@
-import { ChevronRight, MapPin, Navigation, Trees, Warehouse, SunMedium } from "lucide-react";
+import { ArrowUpRight, MapPin, Navigation, Star } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SportComplexData } from "@/hooks/useComplexes";
+import { formatArs, getComplexFallbackLabel, getComplexHighlights, getComplexSports, getStartingPrice } from "@/lib/complex-presentation";
 
 interface SportComplexCardProps {
   complex: SportComplexData;
   selected?: boolean;
   distanceKm?: number | null;
   onSelect: (complex: SportComplexData) => void;
-  onViewDetails: (complex: SportComplexData) => void;
+  onViewDetails?: (complex: SportComplexData) => void;
 }
-
-const iconForAmenity = (amenity: string) => {
-  const common = "h-3.5 w-3.5 shrink-0";
-  if (/tech|techo/i.test(amenity)) return <Warehouse className={common} />;
-  if (/ilumin/i.test(amenity)) return <SunMedium className={common} />;
-  return <Trees className={common} />;
-};
 
 const formatDistance = (distanceKm: number) => distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`;
 
-const SportComplexCard = ({ complex, selected = false, distanceKm = null, onSelect, onViewDetails }: SportComplexCardProps) => {
-  const sports = [...new Set([...complex.catalog_sports, ...(complex.courts ?? []).map((item) => item.sport)])];
-  const labels = [...new Set((complex.courts ?? []).flatMap((item) => [item.has_roof ? "Techada" : null, item.has_lighting ? "Iluminada" : null, item.surface_type].filter((value): value is string => Boolean(value))))].slice(0, 3);
+const SportComplexCard = ({ complex, selected = false, distanceKm = null, onSelect }: SportComplexCardProps) => {
+  const sports = getComplexSports(complex);
+  const highlights = getComplexHighlights(complex);
+  const startingPrice = getStartingPrice(complex.courts);
   const photo = complex.photos?.[0];
-  return <button id={`complex-${complex.id}`} type="button" onClick={() => onSelect(complex)} aria-pressed={selected} className={`group grid w-full grid-cols-[132px_minmax(0,1fr)_auto] overflow-hidden rounded-xl border bg-card text-left shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md dark:border-slate-700 sm:grid-cols-[156px_minmax(0,1fr)_auto] ${selected ? "border-emerald-500 ring-2 ring-emerald-500/30" : "border-slate-200"}`}>
-    <div className="min-h-[152px] bg-gradient-to-br from-emerald-950 via-emerald-800 to-slate-800">{photo ? <img src={photo} alt={`Foto de ${complex.name}`} className="h-full w-full object-cover" /> : <div className="flex h-full items-end p-3 text-xs font-medium text-white/80">Cancha Libre</div>}</div>
-    <div className="min-w-0 space-y-2 px-3 py-3 sm:px-4"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-bold text-foreground">{complex.name}</h3>{sports.map((sport) => <Badge key={sport} className="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950 dark:text-emerald-300">{sport}</Badge>)}</div><div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{complex.neighborhood || "Zona a confirmar"}</span><span className="truncate">{complex.address || "Dirección a confirmar"}</span></div>{Number.isFinite(distanceKm) && <p className="flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"><Navigation className="h-3.5 w-3.5" />A {formatDistance(distanceKm!)}</p>}{labels.length > 0 && <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-emerald-800 dark:text-emerald-300">{labels.map((amenity) => <span key={amenity} className="flex items-center gap-1">{iconForAmenity(amenity)}{amenity}</span>)}</div>}<span className="sr-only">Seleccionar {complex.name}</span></div>
-    <span className="flex items-center pr-3 text-foreground transition-transform group-hover:translate-x-0.5"><ChevronRight className="h-5 w-5" /></span>
-  </button>;
+
+  return <article id={`complex-${complex.id}`} className={`overflow-hidden rounded-2xl border bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-within:ring-4 focus-within:ring-emerald-700/30 ${selected ? "border-emerald-700 ring-2 ring-emerald-700/40" : "border-border"}`}>
+    <Link to={`/complex/${complex.id}`} className="group relative block min-h-44 overflow-hidden bg-slate-950 focus-visible:outline-none">
+      {photo ? <img src={photo} alt={`Foto de ${complex.name}`} className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,hsl(160_84%_38%/.75),transparent_35%),linear-gradient(135deg,hsl(222_32%_12%),hsl(160_64%_21%))]" />}
+      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/15 to-transparent" />
+      {!photo && <div className="absolute right-4 top-4 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[.16em] text-white backdrop-blur">{getComplexFallbackLabel(complex)}</div>}
+      <div className="absolute inset-x-4 bottom-4 flex items-end justify-between gap-3 text-white"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-emerald-200">{complex.neighborhood || "San Salvador de Jujuy"}</p><h3 className="mt-1 text-xl font-bold leading-tight">{complex.name}</h3></div><span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white text-slate-950 transition-transform group-hover:translate-x-0.5"><ArrowUpRight className="h-5 w-5" /><span className="sr-only">Abrir detalle de {complex.name}</span></span></div>
+    </Link>
+    <div className="space-y-4 p-4"><div className="flex flex-wrap gap-2">{sports.slice(0, 3).map((sport) => <Badge key={sport} variant="secondary" className="bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100">{sport}</Badge>)}{sports.length > 3 && <Badge variant="outline">+{sports.length - 3}</Badge>}</div><div className="grid grid-cols-2 gap-3 border-y py-3 text-sm"><div><p className="text-xs text-muted-foreground">Precio desde</p><p className="mt-0.5 font-bold text-foreground">{formatArs(startingPrice)}{startingPrice ? <span className="text-xs font-normal text-muted-foreground"> / hora</span> : null}</p></div><div><p className="text-xs text-muted-foreground">Ubicación</p><p className="mt-0.5 flex items-center gap-1 font-medium text-foreground"><MapPin className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-300" />{Number.isFinite(distanceKm) ? `A ${formatDistance(distanceKm!)}` : complex.neighborhood || "Ver mapa"}</p></div></div>{highlights.length > 0 && <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{highlights.map((highlight) => <li key={highlight.label} className="flex items-center gap-1"><Star className="h-3.5 w-3.5 text-emerald-800 dark:text-emerald-300" aria-hidden="true" />{highlight.value}</li>)}</ul>}<div className="flex items-center gap-2"><Button asChild className="min-h-11 flex-1 bg-emerald-800 text-white hover:bg-emerald-900"><Link to={`/complex/${complex.id}`}>Ver complejo</Link></Button><Button type="button" variant={selected ? "secondary" : "outline"} className="min-h-11" aria-pressed={selected} onClick={() => onSelect(complex)}><Navigation className="mr-1.5 h-4 w-4" />{selected ? "En mapa" : "Mapa"}</Button></div></div>
+  </article>;
 };
 
 export default SportComplexCard;

@@ -141,6 +141,14 @@ All colors MUST be HSL.
     box-shadow: 0 2px 8px hsl(222 32% 12% / .35);
   }
 
+  .cancha-libre-map-marker.is-selected span {
+    width: 36px;
+    height: 36px;
+    margin: -4px;
+    border-color: hsl(var(--foreground));
+    box-shadow: 0 0 0 4px hsl(var(--primary-foreground) / .9), 0 2px 10px hsl(222 32% 12% / .45);
+  }
+
   .dark .bg-green-50\/30, .dark .bg-green-50\/50 { background-color: hsl(150 35% 17% / .9); }
   .dark .border-green-200 { border-color: hsl(150 35% 32%); }
   .dark .bg-blue-50\/50 { background-color: hsl(217 42% 18% / .9); }
